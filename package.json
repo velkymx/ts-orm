@@ -1,5 +1,5 @@
 {
-  "name": "ts-orm",
+  "name": "@velkymx/ts-orm",
   "version": "1.0.0",
   "description": "A lightweight CRUD ORM built on MySQL2 using JSON-based structs",
   "type": "module",
