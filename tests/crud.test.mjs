@@ -1,10 +1,19 @@
-import { create, read, update, remove } from '../src/orm.js';
+import {
+  create,
+  read,
+  readOne,
+  readWith,
+  findOrFail,
+  update,
+  remove
+} from '../src/orm.js';
 import mysql from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 dotenv.config();
 
 const table = 'test';
+const relatedTable = 'related';
 
 const struct = [
   { name: "id", type: "uuid", required: true, length: 36, default: "" },
@@ -19,6 +28,12 @@ const struct = [
   { name: "opt_shareclient", type: "boolean", required: false, length: 1, default: false }
 ];
 
+const relatedStruct = [
+  { name: "id", type: "uuid", required: true, length: 36, default: "" },
+  { name: "ref_id", type: "uuid", required: true, length: 36, default: "" },
+  { name: "label", type: "string", required: false, length: 128, default: "" }
+];
+
 async function getConnection() {
   return await mysql.createConnection({
     host: process.env.DB_HOST,
@@ -30,7 +45,8 @@ async function getConnection() {
 
 async function createTestTable() {
   const conn = await getConnection();
-  const sql = `
+
+  const testTableSQL = `
     CREATE TABLE IF NOT EXISTS ${table} (
       id VARCHAR(36) PRIMARY KEY,
       name VARCHAR(128) NOT NULL,
@@ -44,18 +60,31 @@ async function createTestTable() {
       opt_shareclient BOOLEAN DEFAULT FALSE
     )
   `;
-  await conn.execute(sql);
+
+  const relatedTableSQL = `
+    CREATE TABLE IF NOT EXISTS ${relatedTable} (
+      id VARCHAR(36) PRIMARY KEY,
+      ref_id VARCHAR(36) NOT NULL,
+      label VARCHAR(128)
+    )
+  `;
+
+  await conn.execute(testTableSQL);
+  await conn.execute(relatedTableSQL);
   await conn.end();
 }
 
 async function dropTestTable() {
   const conn = await getConnection();
+  await conn.execute(`DROP TABLE IF EXISTS ${relatedTable}`);
   await conn.execute(`DROP TABLE IF EXISTS ${table}`);
   await conn.end();
 }
 
 describe('ts-orm CRUD operations', () => {
   const testId = uuidv4();
+  const relatedId = uuidv4();
+
   const basePayload = {
     id: testId,
     name: "Test Record",
@@ -88,6 +117,37 @@ describe('ts-orm CRUD operations', () => {
     expect(res.data[0].name).toBe("Test Record");
   });
 
+  test('Read one record', async () => {
+    const res = await readOne(table, { id: testId });
+    expect(res.success).toBe(true);
+    expect(res.data).toHaveProperty('id');
+    expect(res.data.id).toBe(testId);
+  });
+
+  test('Find or fail - success', async () => {
+    const record = await findOrFail(table, 'id', testId);
+    expect(record).toBeDefined();
+    expect(record.id).toBe(testId);
+  });
+
+  test('Insert related record for join', async () => {
+    const res = await create(relatedTable, relatedStruct, {
+      id: relatedId,
+      ref_id: testId,
+      label: "Joined Label"
+    });
+    expect(res.success).toBe(true);
+  });
+
+  test('Read with join', async () => {
+    const res = await readWith(relatedTable, { ref_id: testId }, [
+      { table: table, on: [`${relatedTable}.ref_id`, `${table}.id`], type: 'inner' }
+    ]);
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBeGreaterThan(0);
+    expect(res.data[0].label).toBe("Joined Label");
+  });
+
   test('Update the record', async () => {
     const updatedPayload = {
       ...basePayload,
@@ -116,5 +176,9 @@ describe('ts-orm CRUD operations', () => {
     const res = await read(table, { id: testId });
     expect(res.success).toBe(true);
     expect(res.data.length).toBe(0);
+  });
+
+  test('Find or fail - throws error', async () => {
+    await expect(findOrFail(table, 'id', 'non-existent-id')).rejects.toThrow('Record not found');
   });
 });

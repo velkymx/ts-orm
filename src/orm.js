@@ -48,6 +48,59 @@ export async function read(table, conditions = {}) {
         return formatResponse(false, 'DB Error', error.message);
     }
 }
+export async function readOne(table, conditions = {}) {
+    const result = await read(table, conditions); // just use it directly
+  
+    if (!result.success || !Array.isArray(result.data)) {
+      return { success: false, message: 'Query failed', data: null };
+    }
+  
+    if (result.data.length === 0) {
+      return { success: false, message: 'Record not found', data: null };
+    }
+  
+    return {
+      success: true,
+      message: 'Record found',
+      data: result.data[0]
+    };
+  }
+  
+  export async function findOrFail(table, key, value) {
+    const result = await readOne(table, { [key]: value });
+  
+    if (!result.success || !result.data) {
+      throw new Error(`Record not found in table '${table}' with ${key} = ${value}`);
+    }
+  
+    return result.data;
+  }
+
+  export async function readWith(table, conditions = {}, joins = []) {
+    try {
+        const whereKeys = Object.keys(conditions);
+        const whereClause = whereKeys.length
+            ? `WHERE ${whereKeys.map(k => `${table}.${k} = ?`).join(' AND ')}`
+            : '';
+
+        const joinClause = joins.map(join => {
+            const joinType = (join.type || 'inner').toUpperCase(); // 'INNER', 'LEFT', 'RIGHT'
+            const joinTable = join.table;
+            const [leftCol, rightCol] = join.on;
+            return `${joinType} JOIN ${joinTable} ON ${leftCol} = ${rightCol}`;
+        }).join(' ');
+
+        const sql = `SELECT * FROM ${table} ${joinClause} ${whereClause}`;
+        const values = whereKeys.map(k => conditions[k]);
+
+        const [rows] = await pool.execute(sql, values);
+
+        return formatResponse(true, 'Data retrieved with join', rows);
+    } catch (error) {
+        return formatResponse(false, 'DB Error', error.message);
+    }
+}
+ 
 
 export async function update(table, struct, payload, idKey = 'id') {
     const errors = validatePayload(struct, payload);
