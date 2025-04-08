@@ -18,7 +18,7 @@ A lightweight, JSON-struct-based ORM for Node.js using MySQL2. Define your schem
 ## Installation
 
 ```bash
-npm install ts-orm
+npm i @velkymx/ts-orm
 ```
 
 ## Usage Examples
