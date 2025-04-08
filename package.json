@@ -3,16 +3,27 @@
   "version": "1.0.0",
   "description": "A lightweight CRUD ORM built on MySQL2 using JSON-based structs",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/velkymx/ts-orm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/velkymx/ts-orm/issues"
+  },
+  "homepage": "https://github.com/velkymx/ts-orm#readme",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js"
   },
   "keywords": [
-    "mysql",
     "orm",
+    "mysql",
     "crud",
     "json",
-    "TechnoSorcery"
+    "validator",
+    "mysql2",
+    "nodejs",
+    "techno-sorcery"
   ],
   "author": "TechnoSorcery.com",
   "license": "MIT",
@@ -30,7 +41,9 @@
     "test": "node --experimental-vm-modules node_modules/.bin/jest"
   },
   "jest": {
-    "testMatch": ["**/tests/**/*.test.mjs"],
+    "testMatch": [
+      "**/tests/**/*.test.mjs"
+    ],
     "testEnvironment": "node",
     "transform": {}
   }
