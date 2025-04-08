@@ -33,13 +33,20 @@ export async function create(table, struct, payload) {
     }
 }
 
-export async function read(table, conditions = {}) {
+export async function read(table, conditions = {}, options = {}) {
     const keys = Object.keys(conditions);
-    const where = keys.length
+    const whereClause = keys.length
         ? `WHERE ${keys.map(k => `${k} = ?`).join(' AND ')}`
         : '';
 
-    const sql = `SELECT * FROM ${table} ${where}`;
+    const orderClause = options.orderBy
+        ? `ORDER BY ${options.orderBy} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
+        : '';
+
+    const limitClause = options.limit ? `LIMIT ${parseInt(options.limit)}` : '';
+    const offsetClause = options.offset ? `OFFSET ${parseInt(options.offset)}` : '';
+
+    const sql = `SELECT * FROM ${table} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
     try {
         const [rows] = await pool.execute(sql, keys.map(k => conditions[k]));
@@ -48,6 +55,7 @@ export async function read(table, conditions = {}) {
         return formatResponse(false, 'DB Error', error.message);
     }
 }
+
 export async function readOne(table, conditions = {}) {
     const result = await read(table, conditions); // just use it directly
   
@@ -76,7 +84,7 @@ export async function readOne(table, conditions = {}) {
     return result.data;
   }
 
-  export async function readWith(table, conditions = {}, joins = []) {
+  export async function readWith(table, conditions = {}, joins = [], options = {}) {
     try {
         const whereKeys = Object.keys(conditions);
         const whereClause = whereKeys.length
@@ -84,13 +92,21 @@ export async function readOne(table, conditions = {}) {
             : '';
 
         const joinClause = joins.map(join => {
-            const joinType = (join.type || 'inner').toUpperCase(); // 'INNER', 'LEFT', 'RIGHT'
+            const joinType = (join.type || 'inner').toUpperCase(); // INNER, LEFT, RIGHT
             const joinTable = join.table;
             const [leftCol, rightCol] = join.on;
             return `${joinType} JOIN ${joinTable} ON ${leftCol} = ${rightCol}`;
         }).join(' ');
 
-        const sql = `SELECT * FROM ${table} ${joinClause} ${whereClause}`;
+        const orderClause = options.orderBy
+            ? `ORDER BY ${options.orderBy} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
+            : '';
+
+        const limitClause = options.limit ? `LIMIT ${parseInt(options.limit)}` : '';
+        const offsetClause = options.offset ? `OFFSET ${parseInt(options.offset)}` : '';
+
+        const sql = `SELECT * FROM ${table} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+
         const values = whereKeys.map(k => conditions[k]);
 
         const [rows] = await pool.execute(sql, values);
@@ -100,6 +116,7 @@ export async function readOne(table, conditions = {}) {
         return formatResponse(false, 'DB Error', error.message);
     }
 }
+
  
 
 export async function update(table, struct, payload, idKey = 'id') {

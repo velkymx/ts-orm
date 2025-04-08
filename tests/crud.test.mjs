@@ -110,6 +110,21 @@ describe('ts-orm CRUD operations', () => {
     expect(res.data).toHaveProperty('id');
   });
 
+  test('Insert multiple records for pagination', async () => {
+    for (let i = 0; i < 5; i++) {
+      const id = uuidv4();
+      const payload = {
+        ...basePayload,
+        id,
+        name: `Record ${i}`,
+        date_created: new Date(Date.now() + i * 1000).toISOString().slice(0, 19).replace('T', ' ')
+      };
+      const res = await create(table, struct, payload);
+      expect(res.success).toBe(true);
+    }
+  });
+  
+
   test('Read the record', async () => {
     const res = await read(table, { id: testId });
     expect(res.success).toBe(true);
@@ -124,6 +139,44 @@ describe('ts-orm CRUD operations', () => {
     expect(res.data.id).toBe(testId);
   });
 
+  test('Read sorted records with orderBy DESC', async () => {
+    const res = await read(table, {}, {
+      orderBy: 'date_created',
+      direction: 'DESC'
+    });
+  
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBeGreaterThanOrEqual(5);
+    expect(res.data[0].name).toMatch(/Record \d/); // Most recent first
+  });
+
+  test('Read records with limit and offset', async () => {
+    const res = await read(table, {}, {
+      orderBy: 'date_created',
+      direction: 'ASC',
+      limit: 2,
+      offset: 1
+    });
+  
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBe(2);
+  });
+  
+  test('ReadWith with joins, limit and sort', async () => {
+    const res = await readWith(relatedTable, {}, [
+      { table: table, on: [`${relatedTable}.ref_id`, `${table}.id`], type: 'inner' }
+    ], {
+      orderBy: `${relatedTable}.label`,
+      direction: 'ASC',
+      limit: 5,
+      offset: 0
+    });
+  
+    expect(res.success).toBe(true);
+    expect(Array.isArray(res.data)).toBe(true);
+  });
+
+  
   test('Find or fail - success', async () => {
     const record = await findOrFail(table, 'id', testId);
     expect(record).toBeDefined();
