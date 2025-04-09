@@ -15,6 +15,25 @@ dotenv.config();
 const table = 'test';
 const relatedTable = 'related';
 
+const autoTable = 'autotest';
+
+const autoStruct = [
+  {
+    name: 'id',
+    type: 'number',
+    required: true,
+    length: 11,
+    default: 'auto_increment'
+  },
+  {
+    name: 'title',
+    type: 'string',
+    required: true,
+    length: 128,
+    default: ''
+  }
+];
+
 const struct = [
   { name: "id", type: "uuid", required: true, length: 36, default: "" },
   { name: "name", type: "string", required: true, length: 128, default: "" },
@@ -69,6 +88,13 @@ async function createTestTable() {
     )
   `;
 
+  const autoTableSQL = `
+  CREATE TABLE IF NOT EXISTS ${autoTable} (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(128) NOT NULL
+  )
+`;
+  await conn.execute(autoTableSQL);
   await conn.execute(testTableSQL);
   await conn.execute(relatedTableSQL);
   await conn.end();
@@ -78,6 +104,7 @@ async function dropTestTable() {
   const conn = await getConnection();
   await conn.execute(`DROP TABLE IF EXISTS ${relatedTable}`);
   await conn.execute(`DROP TABLE IF EXISTS ${table}`);
+  await conn.execute(`DROP TABLE IF EXISTS ${autoTable}`);
   await conn.end();
 }
 
@@ -234,4 +261,47 @@ describe('ts-orm CRUD operations', () => {
   test('Find or fail - throws error', async () => {
     await expect(findOrFail(table, 'id', 'non-existent-id')).rejects.toThrow('Record not found');
   });
+
+  describe('Auto-increment ID support', () => {
+    let insertedId;
+  
+    test('Create record without ID', async () => {
+      const res = await create(autoTable, autoStruct, {
+        title: 'Auto User'
+      });
+  
+      expect(res.success).toBe(true);
+      expect(res.data).toHaveProperty('id');
+      insertedId = res.data.id;
+    });
+  
+    test('Update record using auto-incremented ID', async () => {
+      const res = await update(autoTable, autoStruct, {
+        id: insertedId,
+        title: 'Updated Auto User'
+      });
+  
+      expect(res.success).toBe(true);
+      expect(res.data.affectedRows).toBe(1);
+    });
+  
+    test('Delete record using auto-incremented ID', async () => {
+      const res = await remove(autoTable, 'id', insertedId);
+      expect(res.success).toBe(true);
+      expect(res.data.affectedRows).toBe(1);
+    });
+
+    test('Fails if auto_increment ID is manually included in insert', async () => {
+      const res = await create(autoTable, autoStruct, {
+        id: 999,
+        title: 'Should Fail'
+      });
+    
+      expect(res.success).toBe(false);
+      expect(res.message).toBe('Validation failed');
+      expect(res.data).toContain('id should not be provided (auto_increment)');
+    });
+    
+  });
+
 });

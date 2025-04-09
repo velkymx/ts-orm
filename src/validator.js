@@ -1,29 +1,35 @@
-export function validatePayload(struct, payload) {
+export function validatePayload(struct, payload, options = {}) {
     const errors = [];
 
     for (const field of struct) {
-        const { name, type, required, length, enum: enumValues } = field;
-        const value = payload[name];
+        const value = payload[field.name];
+        const isAuto = field.default === 'auto_increment';
+        const skipAuto = options.skipAutoIncrement && isAuto;
 
-        if (required && (value === undefined || value === null || value === '')) {
-            errors.push(`${name} is required`);
+        // Prevent user from passing an auto_increment value on insert
+        if (skipAuto && value !== undefined) {
+            errors.push(`${field.name} should not be provided (auto_increment)`);
             continue;
         }
 
-        if (enumValues && !enumValues.includes(value)) {
-            errors.push(`${name} must be one of ${enumValues.join(', ')}`);
+        if (skipAuto) continue;
+
+        if (field.required && (value === undefined || value === null || value === '')) {
+            errors.push(`${field.name} is required`);
             continue;
         }
 
-        if (length && typeof value === 'string' && value.length > length) {
-            errors.push(`${name} exceeds max length of ${length}`);
+        if (field.type === 'number' && value !== undefined && isNaN(Number(value))) {
+            errors.push(`${field.name} must be a number`);
         }
 
-        if (type === 'uuid' && value && !/^[0-9a-fA-F-]{36}$/.test(value)) {
-            errors.push(`${name} is not a valid UUID`);
+        if (field.enum && !field.enum.includes(value)) {
+            errors.push(`${field.name} must be one of ${field.enum.join(', ')}`);
         }
 
-        // Add type checks as needed
+        if (field.length && typeof value === 'string' && field.length > 0 && value.length > field.length) {
+            errors.push(`${field.name} exceeds max length of ${field.length}`);
+        }
     }
 
     return errors;

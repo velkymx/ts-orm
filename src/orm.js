@@ -16,11 +16,13 @@ function formatResponse(success, message, data = null) {
 }
 
 export async function create(table, struct, payload) {
-    const errors = validatePayload(struct, payload);
+    const errors = validatePayload(struct, payload, { skipAutoIncrement: true });
     if (errors.length) return formatResponse(false, 'Validation failed', errors);
 
-    const columns = struct.map(f => f.name);
-    const values = struct.map(f => payload[f.name] ?? f.default);
+    // Filter out auto_increment fields
+    const filtered = struct.filter(f => f.default !== 'auto_increment');
+    const columns = filtered.map(f => f.name);
+    const values = filtered.map(f => payload[f.name] ?? f.default);
 
     const placeholders = columns.map(() => '?').join(', ');
     const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
@@ -32,6 +34,7 @@ export async function create(table, struct, payload) {
         return formatResponse(false, 'DB Error', error.message);
     }
 }
+
 
 export async function read(table, conditions = {}, options = {}) {
     const keys = Object.keys(conditions);
