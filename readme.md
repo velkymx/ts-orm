@@ -152,14 +152,35 @@ export default router;
 
 ## 📘 Struct Field Types
 
-| Type       | Description                          | Example Value                          | Notes                                      |
-|------------|--------------------------------------|----------------------------------------|--------------------------------------------|
-| `uuid`     | Universally unique identifier        | `"123e4567-e89b-12d3-a456-426614174000"` | Must match UUID v4 format                  |
-| `string`   | Standard string field                | `"Alice"`                               | `length` defines max characters allowed    |
-| `datetime` | Date and time                        | `"2025-04-07 10:00:00"`                 | Format: `YYYY-MM-DD HH:MM:SS`              |
-| `date`     | Date only                            | `"2025-04-07"`                          | Format: `YYYY-MM-DD`                       |
-| `boolean`  | Boolean flag                         | `true` or `false`                       | Stored as TINYINT in MySQL                 |
-| `enum`     | Predefined set of valid strings      | `"percent"` or `"flat"`                | Must define `enum: [...]` in struct        |
+| Type         | Description                          | Example Value                          | Notes                                              |
+|--------------|--------------------------------------|----------------------------------------|----------------------------------------------------|
+| `uuid`       | Universally unique identifier        | `"123e4567-e89b-12d3-a456-426614174000"` | Must match UUID v4 format                          |
+| `string`     | Text string                          | `"Alice"`                               | `length` defines max characters allowed            |
+| `number`     | Integer or float                     | `42`                                     | Used for numeric fields including IDs              |
+| `datetime`   | Date and time                        | `"2025-04-07 10:00:00"`                 | Format: `YYYY-MM-DD HH:MM:SS`                      |
+| `date`       | Date only                            | `"2025-04-07"`                          | Format: `YYYY-MM-DD`                               |
+| `boolean`    | Boolean flag                         | `true` or `false`                       | Stored as TINYINT in MySQL                         |
+| `enum`       | Predefined set of valid strings      | `"percent"` or `"flat"`                | Must define `enum: [...]` in struct                |
+| `auto_increment` | Special case for `number` fields   | Not passed on insert                    | Use `"default": "auto_increment"` in struct config |
+
+
+## Using the CLI Tool to Generate Structs
+
+If you need to quickly create `ts-orm` structs from your MySQL database, here's a command-line tool that allows you to automagically introspect a table and output a JSON struct definition.
+
+### Generate a struct from a table
+
+```bash
+npx ts-orm struct users
+```
+
+This will connect to your database using your `.env` config and generate a file named:
+
+```
+users.json
+```
+
+You can then use this file as the struct definition for `ts-orm` CRUD operations.
 
 ## 🌐 TechnoSorcery.com
 
