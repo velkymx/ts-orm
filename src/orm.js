@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { validatePayload } from './validator.js';
+import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError } from './security.js';
 
 dotenv.config();
 
@@ -19,43 +20,55 @@ export async function create(table, struct, payload) {
     const errors = validatePayload(struct, payload, { skipAutoIncrement: true });
     if (errors.length) return formatResponse(false, 'Validation failed', errors);
 
-    // Filter out auto_increment fields
-    const filtered = struct.filter(f => f.default !== 'auto_increment');
-    const columns = filtered.map(f => f.name);
-    const values = filtered.map(f => payload[f.name] ?? f.default);
-
-    const placeholders = columns.map(() => '?').join(', ');
-    const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
-
     try {
+        // Validate and escape table name
+        const safeTable = validateAndEscapeIdentifier(table, 'table name');
+
+        // Filter out auto_increment fields
+        const filtered = struct.filter(f => f.default !== 'auto_increment');
+        const columns = filtered.map(f => f.name);
+        const values = filtered.map(f => payload[f.name] ?? f.default);
+
+        // Validate and escape column names
+        const safeColumns = columns.map(col => validateAndEscapeIdentifier(col, 'column name'));
+
+        const placeholders = columns.map(() => '?').join(', ');
+        const sql = `INSERT INTO ${safeTable} (${safeColumns.join(', ')}) VALUES (${placeholders})`;
+
         const [result] = await pool.execute(sql, values);
         return formatResponse(true, 'Record created', { id: result.insertId });
     } catch (error) {
-        return formatResponse(false, 'DB Error', error.message);
+        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'create', { table }));
     }
 }
 
 
 export async function read(table, conditions = {}, options = {}) {
-    const keys = Object.keys(conditions);
-    const whereClause = keys.length
-        ? `WHERE ${keys.map(k => `${k} = ?`).join(' AND ')}`
-        : '';
-
-    const orderClause = options.orderBy
-        ? `ORDER BY ${options.orderBy} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
-        : '';
-
-    const limitClause = options.limit ? `LIMIT ${parseInt(options.limit)}` : '';
-    const offsetClause = options.offset ? `OFFSET ${parseInt(options.offset)}` : '';
-
-    const sql = `SELECT * FROM ${table} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
-
     try {
+        // Validate and escape table name
+        const safeTable = validateAndEscapeIdentifier(table, 'table name');
+
+        const keys = Object.keys(conditions);
+
+        // Validate and escape WHERE column names
+        const whereClause = keys.length
+            ? `WHERE ${keys.map(k => `${validateAndEscapeIdentifier(k, 'column name')} = ?`).join(' AND ')}`
+            : '';
+
+        // Validate and escape ORDER BY column
+        const orderClause = options.orderBy
+            ? `ORDER BY ${validateAndEscapeIdentifier(options.orderBy, 'order by column')} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
+            : '';
+
+        const limitClause = options.limit ? `LIMIT ${Number.parseInt(options.limit, 10)}` : '';
+        const offsetClause = options.offset ? `OFFSET ${Number.parseInt(options.offset, 10)}` : '';
+
+        const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+
         const [rows] = await pool.execute(sql, keys.map(k => conditions[k]));
         return formatResponse(true, 'Data retrieved', rows);
     } catch (error) {
-        return formatResponse(false, 'DB Error', error.message);
+        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'read', { table }));
     }
 }
 
@@ -79,36 +92,70 @@ export async function readOne(table, conditions = {}) {
   
   export async function findOrFail(table, key, value) {
     const result = await readOne(table, { [key]: value });
-  
+
     if (!result.success || !result.data) {
-      throw new Error(`Record not found in table '${table}' with ${key} = ${value}`);
+      throw new Error('Record not found');
     }
-  
+
     return result.data;
   }
 
   export async function readWith(table, conditions = {}, joins = [], options = {}) {
     try {
+        // Validate and escape main table name
+        const safeTable = validateAndEscapeIdentifier(table, 'table name');
+
         const whereKeys = Object.keys(conditions);
+
+        // Validate and escape WHERE column names
         const whereClause = whereKeys.length
-            ? `WHERE ${whereKeys.map(k => `${table}.${k} = ?`).join(' AND ')}`
+            ? `WHERE ${whereKeys.map(k => `${safeTable}.${validateAndEscapeIdentifier(k, 'column name')} = ?`).join(' AND ')}`
             : '';
 
+        // Validate and escape JOIN clauses
         const joinClause = joins.map(join => {
             const joinType = (join.type || 'inner').toUpperCase(); // INNER, LEFT, RIGHT
-            const joinTable = join.table;
+
+            // Validate and escape join table name
+            const safeJoinTable = validateAndEscapeIdentifier(join.table, 'join table name');
+
             const [leftCol, rightCol] = join.on;
-            return `${joinType} JOIN ${joinTable} ON ${leftCol} = ${rightCol}`;
+
+            // Validate qualified identifiers (table.column)
+            if (!validateQualifiedIdentifier(leftCol)) {
+                throw new Error(`Invalid join condition: ${leftCol}`);
+            }
+            if (!validateQualifiedIdentifier(rightCol)) {
+                throw new Error(`Invalid join condition: ${rightCol}`);
+            }
+
+            // Split and escape each part
+            const [leftTable, leftField] = leftCol.split('.');
+            const [rightTable, rightField] = rightCol.split('.');
+            const safeLeftCol = `${validateAndEscapeIdentifier(leftTable, 'table name')}.${validateAndEscapeIdentifier(leftField, 'column name')}`;
+            const safeRightCol = `${validateAndEscapeIdentifier(rightTable, 'table name')}.${validateAndEscapeIdentifier(rightField, 'column name')}`;
+
+            return `${joinType} JOIN ${safeJoinTable} ON ${safeLeftCol} = ${safeRightCol}`;
         }).join(' ');
 
-        const orderClause = options.orderBy
-            ? `ORDER BY ${options.orderBy} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
-            : '';
+        // Validate and escape ORDER BY (handle both qualified and simple)
+        let orderClause = '';
+        if (options.orderBy) {
+            if (validateQualifiedIdentifier(options.orderBy)) {
+                // Qualified identifier (table.column)
+                const [orderTable, orderField] = options.orderBy.split('.');
+                const safeOrderBy = `${validateAndEscapeIdentifier(orderTable, 'table name')}.${validateAndEscapeIdentifier(orderField, 'column name')}`;
+                orderClause = `ORDER BY ${safeOrderBy} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`;
+            } else {
+                // Simple identifier
+                orderClause = `ORDER BY ${validateAndEscapeIdentifier(options.orderBy, 'order by column')} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`;
+            }
+        }
 
-        const limitClause = options.limit ? `LIMIT ${parseInt(options.limit)}` : '';
-        const offsetClause = options.offset ? `OFFSET ${parseInt(options.offset)}` : '';
+        const limitClause = options.limit ? `LIMIT ${Number.parseInt(options.limit, 10)}` : '';
+        const offsetClause = options.offset ? `OFFSET ${Number.parseInt(options.offset, 10)}` : '';
 
-        const sql = `SELECT * FROM ${table} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+        const sql = `SELECT * FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
         const values = whereKeys.map(k => conditions[k]);
 
@@ -116,7 +163,7 @@ export async function readOne(table, conditions = {}) {
 
         return formatResponse(true, 'Data retrieved with join', rows);
     } catch (error) {
-        return formatResponse(false, 'DB Error', error.message);
+        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'readWith', { table }));
     }
 }
 
@@ -126,31 +173,40 @@ export async function update(table, struct, payload, idKey = 'id') {
     const errors = validatePayload(struct, payload);
     if (errors.length) return formatResponse(false, 'Validation failed', errors);
 
-    const updates = struct
-        .filter(f => payload[f.name] !== undefined && f.name !== idKey)
-        .map(f => `${f.name} = ?`);
-    const values = struct
-        .filter(f => payload[f.name] !== undefined && f.name !== idKey)
-        .map(f => payload[f.name]);
-
-    values.push(payload[idKey]);
-    const sql = `UPDATE ${table} SET ${updates.join(', ')} WHERE ${idKey} = ?`;
-
     try {
+        // Validate and escape table name and idKey
+        const safeTable = validateAndEscapeIdentifier(table, 'table name');
+        const safeIdKey = validateAndEscapeIdentifier(idKey, 'id column name');
+
+        // Validate and escape column names in SET clause
+        const updates = struct
+            .filter(f => payload[f.name] !== undefined && f.name !== idKey)
+            .map(f => `${validateAndEscapeIdentifier(f.name, 'column name')} = ?`);
+        const values = struct
+            .filter(f => payload[f.name] !== undefined && f.name !== idKey)
+            .map(f => payload[f.name]);
+
+        values.push(payload[idKey]);
+        const sql = `UPDATE ${safeTable} SET ${updates.join(', ')} WHERE ${safeIdKey} = ?`;
+
         const [result] = await pool.execute(sql, values);
         return formatResponse(true, 'Record updated', result);
     } catch (error) {
-        return formatResponse(false, 'DB Error', error.message);
+        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'update', { table }));
     }
 }
 
 export async function remove(table, idKey, idVal) {
-    const sql = `DELETE FROM ${table} WHERE ${idKey} = ?`;
-
     try {
+        // Validate and escape table name and idKey
+        const safeTable = validateAndEscapeIdentifier(table, 'table name');
+        const safeIdKey = validateAndEscapeIdentifier(idKey, 'id column name');
+
+        const sql = `DELETE FROM ${safeTable} WHERE ${safeIdKey} = ?`;
+
         const [result] = await pool.execute(sql, [idVal]);
         return formatResponse(true, 'Record deleted', result);
     } catch (error) {
-        return formatResponse(false, 'DB Error', error.message);
+        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'remove', { table }));
     }
 }
