@@ -1,11 +1,11 @@
 {
   "name": "@velkymx/ts-orm",
-  "version": "1.6.0",
+  "version": "1.5.0",
   "description": "A lightweight CRUD ORM built on MySQL2 using JSON-based structs",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/velkymx/ts-orm.git"
+    "url": "git+https://github.com/velkymx/ts-orm.git"
   },
   "bugs": {
     "url": "https://github.com/velkymx/ts-orm/issues"
@@ -16,7 +16,7 @@
     ".": "./src/index.js"
   },
   "bin": {
-    "ts-orm": "./bin/cli.js"
+    "ts-orm": "bin/cli.js"
   },
   "keywords": [
     "orm",
