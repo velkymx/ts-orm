@@ -108,11 +108,117 @@ async function dropTestTable() {
   await conn.end();
 }
 
+describe('Security Tests', () => {
+  test('Rejects SQL injection in table name', async () => {
+    const maliciousTable = "users; DROP TABLE users--";
+    const res = await read(maliciousTable, {});
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Database operation failed');
+    expect(res.data).toContain('Invalid');
+  });
+
+  test('Rejects SQL injection in ORDER BY', async () => {
+    const res = await read(table, {}, { orderBy: "id; DROP TABLE test--" });
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Database operation failed');
+    expect(res.data).toContain('Invalid');
+  });
+
+  test('Rejects SQL injection in WHERE column names', async () => {
+    const res = await read(table, { "id' OR '1'='1": 'test' });
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Database operation failed');
+    expect(res.data).toContain('Invalid');
+  });
+
+  test('Rejects SQL injection in JOIN table name', async () => {
+    const res = await readWith(table, {}, [
+      { table: "test'; DROP TABLE test--", on: ['test.id', 'test.id'], type: 'inner' }
+    ]);
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Database operation failed');
+    expect(res.data).toContain('Invalid');
+  });
+
+  test('Validates UUID format', async () => {
+    const res = await create(table, struct, {
+      ...basePayload,
+      id: 'not-a-uuid',
+      name: 'Test',
+      json: '{}',
+      related_forms: 'test',
+      date_created: new Date().toISOString().slice(0, 19).replace('T', ' ')
+    });
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Validation failed');
+    expect(res.data).toContain('id must be a valid UUID');
+  });
+
+  test('Validates datetime format', async () => {
+    const res = await create(table, struct, {
+      ...basePayload,
+      id: uuidv4(),
+      date_created: 'invalid-date'
+    });
+    expect(res.success).toBe(false);
+    expect(res.data).toContain('date_created must be in format YYYY-MM-DD HH:MM:SS');
+  });
+
+  test('Validates date format', async () => {
+    const testPayload = {
+      ...basePayload,
+      id: uuidv4(),
+      date_due: '2025/04/07' // Wrong format
+    };
+    const res = await create(table, struct, testPayload);
+    expect(res.success).toBe(false);
+    expect(res.data).toContain('date_due must be in format YYYY-MM-DD');
+  });
+
+  test('Validates boolean type', async () => {
+    const testPayload = {
+      ...basePayload,
+      id: uuidv4(),
+      opt_shareclient: 'not-a-boolean'
+    };
+    const res = await create(table, struct, testPayload);
+    expect(res.success).toBe(false);
+    expect(res.data).toContain('opt_shareclient must be a boolean');
+  });
+
+  test('Allows null for non-required enum field', async () => {
+    const testPayload = {
+      ...basePayload,
+      id: uuidv4(),
+      commission_type: null,
+      opt_shareclient: false
+    };
+    const res = await create(table, struct, testPayload);
+    // This will fail without DB connection, but validates the validation logic
+    expect(res.success).toBe(false);
+    // Should not have validation errors about commission_type
+    if (Array.isArray(res.data)) {
+      expect(res.data.some(err => err.includes('commission_type'))).toBe(false);
+    }
+  });
+});
+
+const basePayload = {
+  id: uuidv4(),
+  name: "Test Record",
+  json: JSON.stringify({ key: "value" }),
+  related_forms: "form1,form2",
+  icon: "test-icon",
+  date_created: new Date().toISOString().slice(0, 19).replace('T', ' '),
+  commission_type: "percent",
+  opt_shareclient: true
+};
+
 describe('ts-orm CRUD operations', () => {
   const testId = uuidv4();
   const relatedId = uuidv4();
 
-  const basePayload = {
+  const crudPayload = {
     id: testId,
     name: "Test Record",
     json: JSON.stringify({ key: "value" }),
@@ -132,7 +238,7 @@ describe('ts-orm CRUD operations', () => {
   });
 
   test('Create a record', async () => {
-    const res = await create(table, struct, basePayload);
+    const res = await create(table, struct, crudPayload);
     expect(res.success).toBe(true);
     expect(res.data).toHaveProperty('id');
   });
@@ -141,7 +247,7 @@ describe('ts-orm CRUD operations', () => {
     for (let i = 0; i < 5; i++) {
       const id = uuidv4();
       const payload = {
-        ...basePayload,
+        ...crudPayload,
         id,
         name: `Record ${i}`,
         date_created: new Date(Date.now() + i * 1000).toISOString().slice(0, 19).replace('T', ' ')
@@ -230,7 +336,7 @@ describe('ts-orm CRUD operations', () => {
 
   test('Update the record', async () => {
     const updatedPayload = {
-      ...basePayload,
+      ...crudPayload,
       name: "Updated Record",
       date_updated: new Date().toISOString().slice(0, 19).replace('T', ' ')
     };

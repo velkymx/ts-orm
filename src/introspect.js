@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { validateAndEscapeIdentifier } from './security.js';
 dotenv.config();
 
 const typeMap = {
@@ -24,7 +25,9 @@ export async function generateStructFromTable(table) {
     database: process.env.DB_DATABASE
   });
 
-  const [columns] = await pool.execute(`SHOW COLUMNS FROM \`${table}\``);
+  // Validate and escape table name
+  const safeTable = validateAndEscapeIdentifier(table, 'table name');
+  const [columns] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
 
   const struct = columns.map(col => {
     const rawType = col.Type.toLowerCase();
