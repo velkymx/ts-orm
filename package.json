@@ -1,7 +1,7 @@
 {
-  "name": "@velkymx/ts-orm",
-  "version": "1.5.0",
-  "description": "A lightweight CRUD ORM built on MySQL2 using JSON-based structs",
+  "name": "vibeorm",
+  "version": "1.6.0",
+  "description": "A lightweight, powerful ORM with Eloquent-like syntax for Node.js and MySQL2",
   "type": "module",
   "repository": {
     "type": "git",
@@ -16,17 +16,23 @@
     ".": "./src/index.js"
   },
   "bin": {
-    "ts-orm": "./bin/cli.js"
+    "vibeorm": "./bin/cli.js"
   },
   "keywords": [
     "orm",
+    "vibe",
+    "vibeorm",
     "mysql",
-    "crud",
-    "json",
-    "validator",
     "mysql2",
+    "eloquent",
+    "query-builder",
+    "model",
+    "crud",
+    "sql",
+    "database",
     "nodejs",
-    "techno-sorcery"
+    "javascript",
+    "typescript"
   ],
   "author": "TechnoSorcery.com",
   "license": "MIT",
