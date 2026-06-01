@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { getLogger } from './logger.js';
 
 // SQL Identifier validation patterns
 const IDENTIFIER_PATTERN = /^[a-zA-Z0-9_]+$/;
@@ -172,8 +173,10 @@ export function isValidBoolean(value: unknown): boolean {
  * @returns Sanitized error message safe for client
  */
 export function sanitizeError(error: DbError, operation: string, context: Record<string, unknown> = {}): string {
-    // Log full error server-side for debugging
-    console.error(`[ts-orm] ${operation} operation failed:`, {
+    // Route the full error to the active logger (console by default). Only error
+    // metadata + caller-supplied context are logged — never query values/bindings,
+    // so payload PII never reaches the logs.
+    getLogger().error(`${operation} operation failed`, {
         error: error.message,
         code: error.code,
         errno: error.errno,

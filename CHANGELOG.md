@@ -18,6 +18,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 - **A1** Dropped the `uuid` runtime dependency — `src` never generated UUIDs (only validates them). Tests now use Node's built-in `crypto.randomUUID()`. Removes ~304K from consumer installs; runtime deps are now just `dotenv` + `mysql2`.
 
 ### Added
+- **Logging (pluggable)** `src/logger.ts`: a `Logger` interface (`debug/info/warn/error`) with a console default (min-level filtering, `[vibeorm]` prefix) and `setLogger()`/`getLogger()`. Enterprises inject pino/winston to route events into their stack and own rotation/redaction; the ORM never writes files. `sanitizeError` now logs through it — error metadata + context only, never query values/bindings (PII-safe). Exported from the package root. Replaces the raw `console.error`/`[ts-orm]` prefix (folds A8).
 - **A4** Coverage gate: `@vitest/coverage-v8` + `npm run test:coverage`; thresholds in `vitest.config.ts` (lines 65 / functions 70 / branches 63 / statements 65) set at the audited baseline to block regression. `coverage/` gitignored.
 - CI: `Node.js CI` workflow runs `build` + `typecheck` + `test` on every push/PR on Node 24 (actions checkout@v5/setup-node@v5), using a MySQL 8.0 service container. The Vitest `globalSetup` now uses a provided DB (via `DB_HOST`/`DB_PORT`) when set, falling back to the local ephemeral server otherwise.
 - `todo.md` task backlog as single source of truth.

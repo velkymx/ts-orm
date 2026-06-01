@@ -21,13 +21,14 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
 
 ## P3 — Low
 
-- [ ] A8 Stale log prefix `[ts-orm]` → `[vibeorm]` — `src/security.ts`.
 - [ ] A10 Tighten non-null assertions / casts where cheap: `src/QueryBuilder.ts:516,519,526,534,542,550` (`where.field!`/`where.fields!`), `src/introspect.ts:88` (`lengthMatch!`), `src/validator.ts:87` (`value as string`). Use discriminated `WhereClause` union so `field`/`fields` narrow without `!`.
 
 ## P4 — Enhancement
 
 - [ ] A11 Streaming/lazy reads: `get()` buffers all rows in memory. Add `stream()`/`cursor()` via `pool.query(...).stream()` for large result sets.
 - [ ] A12 CI coverage gate (depends on A4): fail the build under threshold.
+- [ ] A14 Logging — query/slow-query events: route all `pool.execute` through a single `db.ts` helper that emits `debug` (SQL) + `warn` (slow query over threshold) via `getLogger()`. (Core logger done; this adds the query-level events. Refactors ~10 execute call sites — confirm wrapper approach.)
+- [ ] A15 README: document a pino + pino-roll daily-rotation + `redact` recipe for enterprise injection. (Blocked by the `.md` exclusion filter — needs an exception like CHANGELOG.)
 
 ## P5 — Backlog / Icebox
 
