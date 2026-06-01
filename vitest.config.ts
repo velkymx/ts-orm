@@ -7,12 +7,13 @@ export default defineConfig({
     globals: true,
     // Boot one ephemeral MySQL once for the whole run; see tests/setup/global.ts.
     globalSetup: './tests/setup/global.ts',
-    // Single forked worker: the DB connection env that globalSetup writes into
-    // process.env is inherited by the (one) forked child, and the module-level
-    // mysql2 pools read that env at import time. Multiple workers would each get
-    // their own process and race the shared schema, so we serialize to one.
+    // Run test files sequentially in forks. globalSetup writes the DB connection
+    // into process.env before any worker is forked, so each child inherits it and
+    // the module-level mysql2 pools pick it up at import. Sequential execution
+    // keeps per-file schema setup/teardown from interleaving. (Vitest 4 removed
+    // poolOptions; fileParallelism is the top-level replacement.)
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
+    fileParallelism: false,
     include: ['tests/**/*.test.{mjs,ts}'],
     // First DB op after boot can be slow; give hooks/tests room.
     testTimeout: 30000,
@@ -24,10 +25,10 @@ export default defineConfig({
       include: ['src/**'],
       reporter: ['text', 'json-summary'],
       thresholds: {
-        lines: 65,
-        functions: 70,
-        branches: 63,
-        statements: 65
+        lines: 85,
+        functions: 95,
+        branches: 76,
+        statements: 85
       }
     }
   },

@@ -13,11 +13,6 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
 
 ## P1 — High
 
-- [ ] A2 **Test coverage gaps in core query paths (0 coverage on 18 builder methods + 3 model methods).**
-  - File: `src/QueryBuilder.ts` — untested: `whereNot, whereLike, orWhereLike, whereNotLike, orWhereNotLike, orWhereNot, whereAny, whereAll, whereNone, orWhereIn, whereNotIn(direct), orWhereNull, orWhereNotNull, leftJoin, rightJoin, outerJoin, pluck, clone`; `innerJoin` has only the operator-throw test (no functional JOIN result asserted). `src/model.ts` — `pluck, deleteWhere, readWith` untested.
-  - Coverage delta: the entire JOIN builder family and `whereAny/All/All/None` emit SQL with `validateAndEscapeIdentifier` on caller input — security-relevant escaping is currently unverified.
-  - Resolution: add functional integration tests (real ephemeral MySQL) asserting result rows for each, plus an injection test per join builder (malicious table/column → `success:false`, `data` contains `Invalid`). Highest priority: `leftJoin/rightJoin/innerJoin` result correctness + `whereAny/whereNone` SQL shape.
-
 - [ ] A3 **Type safety: `any` in public signatures and bindings.**
   - File/Line: `src/orm.ts:41,68,103,131,206` (`payload`/`conditions: Record<string, any>`), `src/orm.ts:249` (`values: any[]`), `src/model.ts:94,101,108,115,136,200` (`Record<string, any>`), `src/QueryBuilder.ts:502,510` (`bindings: any[]`).
   - Coverage delta: n/a (type-level).

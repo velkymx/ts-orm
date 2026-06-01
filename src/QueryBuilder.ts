@@ -468,7 +468,12 @@ export class QueryBuilder {
      * Alias for rightJoin.
      */
     outerJoin(table: string, firstColumn: string, operator: string = '=', secondColumn: string | null = null): this {
-        return this.rightJoin(table, firstColumn, operator, secondColumn);
+        // Preserve rightJoin's 3-arg shorthand. Forwarding a 4th (null) argument
+        // would push arguments.length to 4, so rightJoin would read the second
+        // column as the operator and reject it.
+        return arguments.length === 3
+            ? this.rightJoin(table, firstColumn, operator)
+            : this.rightJoin(table, firstColumn, operator, secondColumn);
     }
 
     /**

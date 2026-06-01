@@ -4,6 +4,13 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+- **A2/bug** `outerJoin(table, col1, col2)` (3-arg shorthand) forwarded a 4th `null` argument to `rightJoin`, making it read the second column as the operator and reject the join. Now forwards only the arguments received.
+
+### Changed
+- **A2** Added `tests/builder.test.mjs` covering previously-untested QueryBuilder paths (all `where`/`orWhere` variants, `whereAny/All/None`, every JOIN builder + join-injection rejection, `pluck`, `clone`) and `model.pluck`/`readWith`/`deleteWhere`, plus validator/security edge cases. Coverage: lines 66%→86%, functions 72%→97%, branches 64%→78%. Coverage thresholds raised accordingly.
+- Vitest 4: replaced removed `test.poolOptions` with top-level `fileParallelism: false`.
+
 ### Removed
 - **A1** Dropped the `uuid` runtime dependency — `src` never generated UUIDs (only validates them). Tests now use Node's built-in `crypto.randomUUID()`. Removes ~304K from consumer installs; runtime deps are now just `dotenv` + `mysql2`.
 
