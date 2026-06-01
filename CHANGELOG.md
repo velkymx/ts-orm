@@ -8,6 +8,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 - **A2/bug** `outerJoin(table, col1, col2)` (3-arg shorthand) forwarded a 4th `null` argument to `rightJoin`, making it read the second column as the operator and reject the join. Now forwards only the arguments received.
 
 ### Changed
+- **A6** `update()` now filters the struct once (shared `setFields`) instead of twice when building the SET clause and its bound values.
 - **A5/A7/A9** Consolidated the three per-module mysql2 pools, `dotenv.config()` calls, and duplicated `formatResponse` into a single `src/db.ts` (one shared pool + `dotenv.config({ quiet: true })`). Per mysql2 guidance: one pool reuses the prepared-statement LRU cache across all call sites. `introspect` no longer creates/ends a pool per call. dotenv-17 startup tips silenced.
 - **A3** Removed `any` from all exported signatures: public params are `Record<string, unknown>`, internal bindings `unknown[]`, cast to mysql2's exported `ExecuteValues` type only at each `pool.execute` boundary. `src` is now `any`-free; behavior unchanged.
 - **A2** Added `tests/builder.test.mjs` covering previously-untested QueryBuilder paths (all `where`/`orWhere` variants, `whereAny/All/None`, every JOIN builder + join-injection rejection, `pluck`, `clone`) and `model.pluck`/`readWith`/`deleteWhere`, plus validator/security edge cases. Coverage: lines 66%→86%, functions 72%→97%, branches 64%→78%. Coverage thresholds raised accordingly.

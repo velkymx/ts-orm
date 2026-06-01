@@ -17,15 +17,7 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
 
 ## P2 — Medium
 
-- [ ] A6 **`update()` filters `struct` twice.**
-  - File: `src/orm.ts:199-204`.
-  - Justification: two `.filter` passes over the struct per update; one pass removes a full array allocation + iteration.
-  - Resolution:
-    ```ts
-    const setFields = struct.filter(f => payload[f.name] !== undefined && f.name !== idKey);
-    const updates = setFields.map(f => `${validateAndEscapeIdentifier(f.name, 'column name')} = ?`);
-    const values = setFields.map(f => payload[f.name]);
-    ```
+- None remaining.
 
 ## P3 — Low
 

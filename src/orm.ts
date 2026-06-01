@@ -197,13 +197,11 @@ export async function update(table: string, struct: Field[], payload: Record<str
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
         const safeIdKey = validateAndEscapeIdentifier(idKey, 'id column name');
 
-        // Validate and escape column names in SET clause
-        const updates = struct
-            .filter(f => payload[f.name] !== undefined && f.name !== idKey)
-            .map(f => `${validateAndEscapeIdentifier(f.name, 'column name')} = ?`);
-        const values = struct
-            .filter(f => payload[f.name] !== undefined && f.name !== idKey)
-            .map(f => payload[f.name]);
+        // Single pass over the struct: the columns to SET and their bound values
+        // are derived from the same filtered field list (avoids a second filter).
+        const setFields = struct.filter(f => payload[f.name] !== undefined && f.name !== idKey);
+        const updates = setFields.map(f => `${validateAndEscapeIdentifier(f.name, 'column name')} = ?`);
+        const values = setFields.map(f => payload[f.name]);
 
         // Nothing to SET (only the id key, or no matching columns) would produce
         // `UPDATE ... SET  WHERE id = ?`, a SQL parse error. Fail cleanly instead.
