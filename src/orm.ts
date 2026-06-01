@@ -1,6 +1,9 @@
 import mysql from 'mysql2/promise';
+import type { ResultSetHeader } from 'mysql2';
 import dotenv from 'dotenv';
 import { validatePayload } from './validator.js';
+import type { Field } from './validator.js';
+import type { OrmResponse } from './QueryBuilder.js';
 import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError } from './security.js';
 
 dotenv.config();
@@ -15,11 +18,27 @@ const pool = mysql.createPool({
     database: process.env.DB_DATABASE
 });
 
-function formatResponse(success, message, data = null) {
+// Query shaping options shared by read/readWith.
+export interface ReadOptions {
+    orderBy?: string;
+    direction?: string;
+    limit?: number | string;
+    offset?: number | string;
+}
+
+// A join definition for readWith: `on` is a [left, right] pair of qualified
+// (table.column) identifiers.
+export interface JoinSpec {
+    type?: string;
+    table: string;
+    on: [string, string] | string[];
+}
+
+function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
     return { success, message, data };
 }
 
-export async function create(table, struct, payload) {
+export async function create(table: string, struct: Field[], payload: Record<string, any>): Promise<OrmResponse> {
     const errors = validatePayload(struct, payload, { skipAutoIncrement: true });
     if (errors.length) return formatResponse(false, 'Validation failed', errors);
 
@@ -39,14 +58,14 @@ export async function create(table, struct, payload) {
         const sql = `INSERT INTO ${safeTable} (${safeColumns.join(', ')}) VALUES (${placeholders})`;
 
         const [result] = await pool.execute(sql, values);
-        return formatResponse(true, 'Record created', { id: result.insertId });
+        return formatResponse(true, 'Record created', { id: (result as ResultSetHeader).insertId });
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'create', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'create', { table }));
     }
 }
 
 
-export async function read(table, conditions = {}, options = {}) {
+export async function read(table: string, conditions: Record<string, any> = {}, options: ReadOptions = {}): Promise<OrmResponse> {
     try {
         // Validate and escape table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -65,8 +84,8 @@ export async function read(table, conditions = {}, options = {}) {
 
         // MySQL requires LIMIT before OFFSET; emit the max-row sentinel when an
         // offset is supplied without a limit. != null honors an explicit 0.
-        const limit = options.limit != null ? Number.parseInt(options.limit, 10) : null;
-        const offset = options.offset != null ? Number.parseInt(options.offset, 10) : null;
+        const limit = options.limit != null ? Number.parseInt(String(options.limit), 10) : null;
+        const offset = options.offset != null ? Number.parseInt(String(options.offset), 10) : null;
         const limitClause = limit != null ? `LIMIT ${limit}` : '';
         const offsetClause = offset != null
             ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
@@ -77,29 +96,29 @@ export async function read(table, conditions = {}, options = {}) {
         const [rows] = await pool.execute(sql, keys.map(k => conditions[k]));
         return formatResponse(true, 'Data retrieved', rows);
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'read', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'read', { table }));
     }
 }
 
-export async function readOne(table, conditions = {}) {
+export async function readOne(table: string, conditions: Record<string, any> = {}): Promise<OrmResponse> {
     const result = await read(table, conditions); // just use it directly
-  
+
     if (!result.success || !Array.isArray(result.data)) {
       return { success: false, message: 'Query failed', data: null };
     }
-  
+
     if (result.data.length === 0) {
       return { success: false, message: 'Record not found', data: null };
     }
-  
+
     return {
       success: true,
       message: 'Record found',
       data: result.data[0]
     };
   }
-  
-  export async function findOrFail(table, key, value) {
+
+  export async function findOrFail(table: string, key: string, value: unknown): Promise<unknown> {
     const result = await readOne(table, { [key]: value });
 
     if (!result.success || !result.data) {
@@ -109,7 +128,7 @@ export async function readOne(table, conditions = {}) {
     return result.data;
   }
 
-  export async function readWith(table, conditions = {}, joins = [], options = {}) {
+  export async function readWith(table: string, conditions: Record<string, any> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {
     try {
         // Validate and escape main table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -163,8 +182,8 @@ export async function readOne(table, conditions = {}) {
 
         // MySQL requires LIMIT before OFFSET; emit the max-row sentinel when an
         // offset is supplied without a limit. != null honors an explicit 0.
-        const limit = options.limit != null ? Number.parseInt(options.limit, 10) : null;
-        const offset = options.offset != null ? Number.parseInt(options.offset, 10) : null;
+        const limit = options.limit != null ? Number.parseInt(String(options.limit), 10) : null;
+        const offset = options.offset != null ? Number.parseInt(String(options.offset), 10) : null;
         const limitClause = limit != null ? `LIMIT ${limit}` : '';
         const offsetClause = offset != null
             ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
@@ -178,13 +197,13 @@ export async function readOne(table, conditions = {}) {
 
         return formatResponse(true, 'Data retrieved with join', rows);
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'readWith', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'readWith', { table }));
     }
 }
 
- 
 
-export async function update(table, struct, payload, idKey = 'id') {
+
+export async function update(table: string, struct: Field[], payload: Record<string, any>, idKey: string = 'id'): Promise<OrmResponse> {
     // Updates are partial by nature (only provided columns are written), so
     // required fields that are absent from the payload must not fail validation.
     const errors = validatePayload(struct, payload, { partial: true });
@@ -215,11 +234,11 @@ export async function update(table, struct, payload, idKey = 'id') {
         const [result] = await pool.execute(sql, values);
         return formatResponse(true, 'Record updated', result);
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'update', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'update', { table }));
     }
 }
 
-export async function remove(table, idKey, idVal) {
+export async function remove(table: string, idKey: string, idVal: unknown): Promise<OrmResponse> {
     try {
         // Validate and escape table name and idKey
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -227,9 +246,10 @@ export async function remove(table, idKey, idVal) {
 
         const sql = `DELETE FROM ${safeTable} WHERE ${safeIdKey} = ?`;
 
-        const [result] = await pool.execute(sql, [idVal]);
+        const values: any[] = [idVal];
+        const [result] = await pool.execute(sql, values);
         return formatResponse(true, 'Record deleted', result);
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error, 'remove', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'remove', { table }));
     }
 }

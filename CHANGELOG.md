@@ -12,6 +12,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 - Configurable connection port: all pools and test connections honor `DB_PORT` (falls back to 3306).
 
 ### Changed
+- **M5** Migrated `src/orm.js` → `orm.ts`: typed CRUD functions, `ResultSetHeader.insertId`, exported `ReadOptions`/`JoinSpec`. Behavior unchanged.
 - **M4** Migrated `src/QueryBuilder.js` → `QueryBuilder.ts`: typed `WhereClause`/`JoinClause` shapes, `this`-returning chainable methods, mysql2 `RowDataPacket` casts, and an exported `OrmResponse<T>` envelope. Behavior unchanged.
 - **M3** Migrated `src/introspect.js` → `introspect.ts` (typed `SHOW COLUMNS` rows, returns `Field[]`). `bin/cli.js` now imports the built `dist/introspect.js`. Behavior unchanged.
 - **M2** Migrated `src/validator.js` → `validator.ts`; exports shared `Field`/`FieldType`/`ValidateOptions` types. Behavior unchanged.
