@@ -12,7 +12,6 @@ Decisions locked:
 
 ## P1 — Correctness (small, high value)
 
-- [ ] S4 Empty `UPDATE` (no matching fields) builds invalid `SET` SQL — guard.
 - [ ] S6 `Number('')===0` passes `number` validation in `validator` — reject empty/non-finite.
 
 ## P2 — TypeScript migration (incremental, one file per commit)

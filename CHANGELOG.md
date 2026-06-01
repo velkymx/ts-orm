@@ -18,6 +18,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 - **S1** Comparison operators in `QueryBuilder` `where`/`orWhere` and all `*Join` builders are now validated against a fixed allowlist (`= != <> > < >= <= LIKE NOT LIKE`). Previously a caller-supplied operator was interpolated raw into SQL (operator-position injection, e.g. `where('age', '0 OR 1=1 OR age <', x)`); non-whitelisted operators now throw immediately.
 
 ### Fixed
+- **S4** `update()` with no updatable columns (only the id key) emitted invalid `UPDATE ... SET  WHERE id = ?`. Now returns a clean `No fields to update` failure.
 - **B1** `model.where()` forwarded `undefined` as a third argument, making the value parse as the SQL operator (`ER_PARSE_ERROR`). Now disambiguates via `arguments.length`.
 - **S2** `OFFSET` emitted without `LIMIT` produced invalid MySQL; now prepends the documented max-row sentinel. **S3** (incidental): limit/offset use `!= null`, honoring an explicit `0`.
 - **B2** DECIMAL `SUM`/`AVG` returned as strings (mysql2); now coerced to Number, leaving non-numeric (`MAX`/`MIN` of date/text) and null untouched.

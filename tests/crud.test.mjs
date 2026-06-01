@@ -187,6 +187,14 @@ describe('Security Tests', () => {
     expect(res.data).toContain('opt_shareclient must be a boolean');
   });
 
+  test('Rejects update with no updatable fields (avoids invalid SET SQL)', async () => {
+    // Only the id key is supplied, so there is nothing to SET. Must fail cleanly
+    // rather than emitting `UPDATE ... SET  WHERE id = ?` (a SQL parse error).
+    const res = await update(table, struct, { id: uuidv4() });
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('No fields to update');
+  });
+
   test('Allows null for non-required enum field', async () => {
     const testPayload = {
       ...basePayload,

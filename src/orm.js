@@ -203,6 +203,12 @@ export async function update(table, struct, payload, idKey = 'id') {
             .filter(f => payload[f.name] !== undefined && f.name !== idKey)
             .map(f => payload[f.name]);
 
+        // Nothing to SET (only the id key, or no matching columns) would produce
+        // `UPDATE ... SET  WHERE id = ?`, a SQL parse error. Fail cleanly instead.
+        if (updates.length === 0) {
+            return formatResponse(false, 'No fields to update', []);
+        }
+
         values.push(payload[idKey]);
         const sql = `UPDATE ${safeTable} SET ${updates.join(', ')} WHERE ${safeIdKey} = ?`;
 
