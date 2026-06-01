@@ -16,8 +16,8 @@ jobs:
 
     strategy:
       matrix:
-        # Vitest 4 requires Node >= 20.19 / >= 22.12. 24.x is the active release.
-        node-version: [20.x, 22.x, 24.x]
+        # Build target: Node 24 only.
+        node-version: [24.x]
 
     services:
       mysql:
@@ -41,9 +41,9 @@ jobs:
       DB_DATABASE: vibeorm_test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
