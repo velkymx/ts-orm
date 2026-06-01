@@ -12,8 +12,7 @@ Decisions locked:
 
 ## P2 — TypeScript migration (incremental, one file per commit)
 
-- [ ] M6 `src/model.js` -> `.ts`.
-- [ ] M7 `src/index.js` + `bin/cli.js` -> `.ts`; add build step (`tsc` -> `dist`); update `package.json` exports/`types`/`bin`.
+- [ ] M7 `src/index.js` + `bin/cli.js` -> `.ts`; update `package.json` `bin` to dist. (Build step + exports/types already done in M0.)
 
 ## P3 — Cleanup / refactor
 
