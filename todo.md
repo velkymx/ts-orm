@@ -10,10 +10,6 @@ Decisions locked:
 
 ---
 
-## P2 — TypeScript migration (incremental, one file per commit)
-
-- [ ] M7 `src/index.js` + `bin/cli.js` -> `.ts`; update `package.json` `bin` to dist. (Build step + exports/types already done in M0.)
-
 ## P3 — Cleanup / refactor
 
 - [ ] S5 Three separate mysql2 pools (`orm`, `QueryBuilder`, `introspect`); consolidate into one shared connection module. REQUIRES APPROVAL (cross-file refactor).

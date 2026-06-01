@@ -20,7 +20,7 @@
     }
   },
   "bin": {
-    "vibeorm": "bin/cli.js"
+    "vibeorm": "dist/cli.js"
   },
   "files": [
     "dist"
