@@ -1,7 +1,28 @@
 import { isValidUUID, isValidDatetime, isValidDate, isValidBoolean } from './security.js';
 
-export function validatePayload(struct, payload, options = {}) {
-    const errors = [];
+// Supported column types. Introspection and hand-written structs both produce
+// these; anything unrecognized is treated as a plain string elsewhere.
+export type FieldType = 'number' | 'string' | 'uuid' | 'datetime' | 'date' | 'boolean' | 'enum';
+
+// A single column definition within a table struct. Shared across the ORM.
+export interface Field {
+    name: string;
+    type: FieldType;
+    required?: boolean;
+    length?: number | null;
+    default?: unknown;
+    enum?: string[];
+}
+
+export interface ValidateOptions {
+    // Insert path: an auto_increment column must not be supplied by the caller.
+    skipAutoIncrement?: boolean;
+    // Update path: absent required columns are left untouched rather than flagged.
+    partial?: boolean;
+}
+
+export function validatePayload(struct: Field[], payload: Record<string, unknown>, options: ValidateOptions = {}): string[] {
+    const errors: string[] = [];
 
     for (const field of struct) {
         const value = payload[field.name];
@@ -63,7 +84,7 @@ export function validatePayload(struct, payload, options = {}) {
         }
 
         // Enum validation (skip undefined/null for non-required fields)
-        if (field.enum && !field.enum.includes(value)) {
+        if (field.enum && !field.enum.includes(value as string)) {
             errors.push(`${field.name} must be one of ${field.enum.join(', ')}`);
         }
 
