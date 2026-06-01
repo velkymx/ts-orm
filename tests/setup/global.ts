@@ -15,6 +15,13 @@ let db: MySQLDB | undefined;
  * a live database.
  */
 export async function setup(): Promise<void> {
+  // If a MySQL connection is already provided (e.g. a CI service container sets
+  // DB_HOST/DB_PORT), use it as-is and skip booting the ephemeral server. This
+  // keeps CI fast and reliable while local runs still get a throwaway server.
+  if (process.env.DB_HOST && process.env.DB_PORT) {
+    return;
+  }
+
   // Pin a concrete Oracle MySQL version. Without this, mysql-memory-server may
   // reuse a system-installed `mysqld` (e.g. MariaDB), which rejects MySQL-only
   // init flags like --initialize-insecure and fails to start.

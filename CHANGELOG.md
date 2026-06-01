@@ -5,6 +5,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 ## [Unreleased]
 
 ### Added
+- CI: `Node.js CI` workflow runs `build` + `typecheck` + `test` on every push/PR across Node 20/22/24, using a MySQL 8.0 service container. The Vitest `globalSetup` now uses a provided DB (via `DB_HOST`/`DB_PORT`) when set, falling back to the local ephemeral server otherwise.
 - `todo.md` task backlog as single source of truth.
 - `tsconfig.json` typecheck gate — incremental migration config (`allowJs`, `checkJs` off, `strict`); `npm run typecheck`.
 - Vitest + ephemeral real-MySQL test harness (`mysql-memory-server`, pinned MySQL 8.0.40) via `globalSetup`; removes the live-MySQL dependency. `crud`/`model` suites run with zero external DB.
