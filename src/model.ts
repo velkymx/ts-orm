@@ -91,28 +91,28 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
         /**
          * Get all records.
          */
-        async all(conditions: Record<string, any> = {}) {
+        async all(conditions: Record<string, unknown> = {}) {
             return read(table, conditions);
         },
 
         /**
          * Get first record matching conditions.
          */
-        async first(conditions: Record<string, any> = {}) {
+        async first(conditions: Record<string, unknown> = {}) {
             return readOne(table, conditions);
         },
 
         /**
          * Create a new record.
          */
-        async create(payload: Record<string, any>) {
+        async create(payload: Record<string, unknown>) {
             return create(table, struct, payload);
         },
 
         /**
          * Update a record (payload must include the primary key).
          */
-        async update(payload: Record<string, any>, idKey: string | null = null) {
+        async update(payload: Record<string, unknown>, idKey: string | null = null) {
             return update(table, struct, payload, idKey || primaryKey);
         },
 
@@ -133,7 +133,7 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
         /**
          * Read with joins.
          */
-        async readWith(conditions: Record<string, any>, joins: JoinSpec[], options: ReadOptions = {}) {
+        async readWith(conditions: Record<string, unknown>, joins: JoinSpec[], options: ReadOptions = {}) {
             return readWith(table, conditions, joins, options);
         },
 
@@ -197,7 +197,7 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
          * Pluck a single column's values as an array (for chaining, use
          * query().where(...).pluck()).
          */
-        async pluck(field: string, conditions: Record<string, any> = {}) {
+        async pluck(field: string, conditions: Record<string, unknown> = {}) {
             const builder = new QueryBuilder(table, struct);
 
             // Apply simple conditions if provided

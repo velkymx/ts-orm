@@ -13,15 +13,7 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
 
 ## P1 — High
 
-- [ ] A3 **Type safety: `any` in public signatures and bindings.**
-  - File/Line: `src/orm.ts:41,68,103,131,206` (`payload`/`conditions: Record<string, any>`), `src/orm.ts:249` (`values: any[]`), `src/model.ts:94,101,108,115,136,200` (`Record<string, any>`), `src/QueryBuilder.ts:502,510` (`bindings: any[]`).
-  - Coverage delta: n/a (type-level).
-  - Resolution: public surface uses `Record<string, unknown>` / `unknown[]`; isolate the single unavoidable driver cast at the `pool.execute` boundary, commented:
-    ```ts
-    // orm.ts / QueryBuilder.ts public params: Record<string, unknown>, bindings: unknown[]
-    const [rows] = await pool.execute(sql, bindings as mysql.ExecuteValues[]); // single mysql2 boundary cast
-    ```
-    Removes `any` from every exported signature; one documented boundary cast remains (mysql2's `ExecuteValues` requirement).
+- None remaining.
 
 ## P2 — Medium
 

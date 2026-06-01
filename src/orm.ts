@@ -1,5 +1,5 @@
 import mysql from 'mysql2/promise';
-import type { ResultSetHeader } from 'mysql2';
+import type { ResultSetHeader, ExecuteValues } from 'mysql2';
 import dotenv from 'dotenv';
 import { validatePayload } from './validator.js';
 import type { Field } from './validator.js';
@@ -38,7 +38,7 @@ function formatResponse(success: boolean, message: string, data: unknown = null)
     return { success, message, data };
 }
 
-export async function create(table: string, struct: Field[], payload: Record<string, any>): Promise<OrmResponse> {
+export async function create(table: string, struct: Field[], payload: Record<string, unknown>): Promise<OrmResponse> {
     const errors = validatePayload(struct, payload, { skipAutoIncrement: true });
     if (errors.length) return formatResponse(false, 'Validation failed', errors);
 
@@ -57,7 +57,7 @@ export async function create(table: string, struct: Field[], payload: Record<str
         const placeholders = columns.map(() => '?').join(', ');
         const sql = `INSERT INTO ${safeTable} (${safeColumns.join(', ')}) VALUES (${placeholders})`;
 
-        const [result] = await pool.execute(sql, values);
+        const [result] = await pool.execute(sql, values as ExecuteValues[]);
         return formatResponse(true, 'Record created', { id: (result as ResultSetHeader).insertId });
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'create', { table }));
@@ -65,7 +65,7 @@ export async function create(table: string, struct: Field[], payload: Record<str
 }
 
 
-export async function read(table: string, conditions: Record<string, any> = {}, options: ReadOptions = {}): Promise<OrmResponse> {
+export async function read(table: string, conditions: Record<string, unknown> = {}, options: ReadOptions = {}): Promise<OrmResponse> {
     try {
         // Validate and escape table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -93,14 +93,14 @@ export async function read(table: string, conditions: Record<string, any> = {}, 
 
         const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
-        const [rows] = await pool.execute(sql, keys.map(k => conditions[k]));
+        const [rows] = await pool.execute(sql, keys.map(k => conditions[k]) as ExecuteValues[]);
         return formatResponse(true, 'Data retrieved', rows);
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'read', { table }));
     }
 }
 
-export async function readOne(table: string, conditions: Record<string, any> = {}): Promise<OrmResponse> {
+export async function readOne(table: string, conditions: Record<string, unknown> = {}): Promise<OrmResponse> {
     const result = await read(table, conditions); // just use it directly
 
     if (!result.success || !Array.isArray(result.data)) {
@@ -128,7 +128,7 @@ export async function readOne(table: string, conditions: Record<string, any> = {
     return result.data;
   }
 
-  export async function readWith(table: string, conditions: Record<string, any> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {
+  export async function readWith(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {
     try {
         // Validate and escape main table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -193,7 +193,7 @@ export async function readOne(table: string, conditions: Record<string, any> = {
 
         const values = whereKeys.map(k => conditions[k]);
 
-        const [rows] = await pool.execute(sql, values);
+        const [rows] = await pool.execute(sql, values as ExecuteValues[]);
 
         return formatResponse(true, 'Data retrieved with join', rows);
     } catch (error) {
@@ -203,7 +203,7 @@ export async function readOne(table: string, conditions: Record<string, any> = {
 
 
 
-export async function update(table: string, struct: Field[], payload: Record<string, any>, idKey: string = 'id'): Promise<OrmResponse> {
+export async function update(table: string, struct: Field[], payload: Record<string, unknown>, idKey: string = 'id'): Promise<OrmResponse> {
     // Updates are partial by nature (only provided columns are written), so
     // required fields that are absent from the payload must not fail validation.
     const errors = validatePayload(struct, payload, { partial: true });
@@ -231,7 +231,7 @@ export async function update(table: string, struct: Field[], payload: Record<str
         values.push(payload[idKey]);
         const sql = `UPDATE ${safeTable} SET ${updates.join(', ')} WHERE ${safeIdKey} = ?`;
 
-        const [result] = await pool.execute(sql, values);
+        const [result] = await pool.execute(sql, values as ExecuteValues[]);
         return formatResponse(true, 'Record updated', result);
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'update', { table }));
@@ -246,8 +246,8 @@ export async function remove(table: string, idKey: string, idVal: unknown): Prom
 
         const sql = `DELETE FROM ${safeTable} WHERE ${safeIdKey} = ?`;
 
-        const values: any[] = [idVal];
-        const [result] = await pool.execute(sql, values);
+        const values: unknown[] = [idVal];
+        const [result] = await pool.execute(sql, values as ExecuteValues[]);
         return formatResponse(true, 'Record deleted', result);
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'remove', { table }));
