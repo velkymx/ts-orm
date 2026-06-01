@@ -28,10 +28,6 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
     ```
     Removes `any` from every exported signature; one documented boundary cast remains (mysql2's `ExecuteValues` requirement).
 
-- [ ] A4 **No coverage metric — cannot do metric-driven validation.**
-  - File: `package.json` scripts / `vitest.config.ts`.
-  - Resolution: add `@vitest/coverage-v8` (devDep), `"test:coverage": "vitest run --coverage"`, and config `coverage: { provider: 'v8', include: ['src/**'], thresholds: { lines: 85, functions: 90, branches: 80 } }`. Gate A2 against the report. (devDep only — no `dist`/consumer impact.)
-
 ## P2 — Medium
 
 - [ ] A5 **Three mysql2 pools + three `dotenv.config()` calls.**

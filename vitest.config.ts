@@ -17,5 +17,18 @@ export default defineConfig({
     // First DB op after boot can be slow; give hooks/tests room.
     testTimeout: 30000,
     hookTimeout: 120000,
+    // Coverage gate. Thresholds are set at the current audited baseline so the
+    // suite fails on regression; raise them as A2 lands missing tests.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**'],
+      reporter: ['text', 'json-summary'],
+      thresholds: {
+        lines: 65,
+        functions: 70,
+        branches: 63,
+        statements: 65
+      }
+    }
   },
 });
