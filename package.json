@@ -33,7 +33,7 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "mysql2": "^3.14.0",
-    "uuid": "^11.1.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "eslint": "^9.24.0",
