@@ -1,30 +1,13 @@
-import mysql from 'mysql2/promise';
 import type { RowDataPacket, ExecuteValues } from 'mysql2';
-import dotenv from 'dotenv';
+import { pool, formatResponse } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field } from './validator.js';
-
-dotenv.config();
-
-const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    // Honor a configurable port; falls back to MySQL's default 3306 when unset.
-    // Required so the suite can target an ephemeral mysqld on a random port.
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
-});
 
 // Standard envelope returned by every data operation.
 export interface OrmResponse<T = unknown> {
     success: boolean;
     message: string;
     data: T;
-}
-
-function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
-    return { success, message, data };
 }
 
 // Internal representation of an accumulated WHERE condition. `field` is used by

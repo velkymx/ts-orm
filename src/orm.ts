@@ -1,22 +1,9 @@
-import mysql from 'mysql2/promise';
 import type { ResultSetHeader, ExecuteValues } from 'mysql2';
-import dotenv from 'dotenv';
 import { validatePayload } from './validator.js';
 import type { Field } from './validator.js';
 import type { OrmResponse } from './QueryBuilder.js';
+import { pool, formatResponse } from './db.js';
 import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError } from './security.js';
-
-dotenv.config();
-
-const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    // Honor a configurable port; falls back to MySQL's default 3306 when unset.
-    // Required so the suite can target an ephemeral mysqld on a random port.
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
-});
 
 // Query shaping options shared by read/readWith.
 export interface ReadOptions {
@@ -32,10 +19,6 @@ export interface JoinSpec {
     type?: string;
     table: string;
     on: [string, string] | string[];
-}
-
-function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
-    return { success, message, data };
 }
 
 export async function create(table: string, struct: Field[], payload: Record<string, unknown>): Promise<OrmResponse> {

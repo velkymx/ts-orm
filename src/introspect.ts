@@ -1,8 +1,6 @@
-import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
+import { pool } from './db.js';
 import { validateAndEscapeIdentifier } from './security.js';
 import type { Field, FieldType } from './validator.js';
-dotenv.config();
 
 // Maps MySQL base column types to the ORM's field types.
 const typeMap: Record<string, FieldType> = {
@@ -30,15 +28,6 @@ interface ColumnRow {
 }
 
 export async function generateStructFromTable(table: string): Promise<Field[]> {
-  const pool = mysql.createPool({
-    host: process.env.DB_HOST,
-    // Honor a configurable port; falls back to MySQL's default 3306 when unset.
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
-  });
-
   // Validate and escape table name
   const safeTable = validateAndEscapeIdentifier(table, 'table name');
   const [rows] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
@@ -93,6 +82,5 @@ export async function generateStructFromTable(table: string): Promise<Field[]> {
     };
   });
 
-  await pool.end();
   return struct;
 }
