@@ -12,7 +12,6 @@ Decisions locked:
 
 ## P2 — TypeScript migration (incremental, one file per commit)
 
-- [ ] M1 `src/security.js` -> `.ts` (pure, no deps — safest first).
 - [ ] M2 `src/validator.js` -> `.ts`.
 - [ ] M3 `src/introspect.js` -> `.ts`.
 - [ ] M4 `src/QueryBuilder.js` -> `.ts`.

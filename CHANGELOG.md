@@ -11,6 +11,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 - Configurable connection port: all pools and test connections honor `DB_PORT` (falls back to 3306).
 
 ### Changed
+- **M1** Migrated `src/security.js` → `security.ts` (typed, strict). First file of the incremental TypeScript migration; behavior unchanged.
 - **M0** Build pipeline: `npm run build` compiles `src` → `dist` (JS + `.d.ts`) via `tsconfig.build.json`; `package.json` `main`/`types`/`exports`/`files` now point at `dist`; `prepublishOnly` runs the build; `dist/` is gitignored. Tests continue to run against `src` via Vitest. Enables safe per-file TS migration without breaking runtime resolution.
 - Test runner: **Jest → Vitest** (`npm test` → `vitest run`).
 - Dependencies upgraded to latest: dotenv 17, mysql2 3.22, uuid 14, eslint 10, prettier 3.8, typescript 6. Removed jest.

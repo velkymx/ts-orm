@@ -10,7 +10,7 @@ const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 // MySQL error code mappings to safe messages
-const ERROR_MESSAGES = {
+const ERROR_MESSAGES: Record<string, string> = {
     ER_DUP_ENTRY: 'Record already exists',
     ER_DUP_KEY: 'Record already exists',
     ER_NO_REFERENCED_ROW: 'Related record not found',
@@ -26,14 +26,18 @@ const ERROR_MESSAGES = {
     DEFAULT: 'Database operation failed'
 };
 
+// Shape of the errors mysql2 throws: a standard Error plus driver metadata.
+// Typed loosely because the values originate from an untyped catch clause.
+type DbError = Error & { code?: string; errno?: number; sqlState?: string };
+
 /**
  * Validates that an identifier contains only safe characters
- * @param {string} identifier - The identifier to validate
- * @param {string} context - Context for error message (e.g., 'table name', 'column name')
- * @returns {boolean} True if valid
- * @throws {Error} If identifier is invalid
+ * @param identifier - The identifier to validate
+ * @param context - Context for error message (e.g., 'table name', 'column name')
+ * @returns True if valid
+ * @throws If identifier is invalid
  */
-export function validateIdentifier(identifier, context = 'identifier') {
+export function validateIdentifier(identifier: string, context = 'identifier'): boolean {
     if (typeof identifier !== 'string' || identifier.length === 0) {
         throw new Error(`Invalid ${context}: must be a non-empty string`);
     }
@@ -47,31 +51,31 @@ export function validateIdentifier(identifier, context = 'identifier') {
 
 /**
  * Escapes an identifier using mysql2's escapeId
- * @param {string} identifier - The identifier to escape
- * @returns {string} Escaped identifier
+ * @param identifier - The identifier to escape
+ * @returns Escaped identifier
  */
-export function escapeIdentifier(identifier) {
+export function escapeIdentifier(identifier: string): string {
     return mysql.escapeId(identifier);
 }
 
 /**
  * Validates and escapes an identifier (hybrid approach)
- * @param {string} identifier - The identifier to validate and escape
- * @param {string} context - Context for error message
- * @returns {string} Escaped identifier
- * @throws {Error} If identifier is invalid
+ * @param identifier - The identifier to validate and escape
+ * @param context - Context for error message
+ * @returns Escaped identifier
+ * @throws If identifier is invalid
  */
-export function validateAndEscapeIdentifier(identifier, context = 'identifier') {
+export function validateAndEscapeIdentifier(identifier: string, context = 'identifier'): string {
     validateIdentifier(identifier, context);
     return escapeIdentifier(identifier);
 }
 
 /**
  * Validates a qualified identifier (e.g., table.column)
- * @param {string} qualifiedId - The qualified identifier to validate
- * @returns {boolean} True if valid
+ * @param qualifiedId - The qualified identifier to validate
+ * @returns True if valid
  */
-export function validateQualifiedIdentifier(qualifiedId) {
+export function validateQualifiedIdentifier(qualifiedId: unknown): boolean {
     if (typeof qualifiedId !== 'string' || qualifiedId.length === 0) {
         return false;
     }
@@ -80,10 +84,10 @@ export function validateQualifiedIdentifier(qualifiedId) {
 
 /**
  * Validates UUID v4 format
- * @param {*} value - The value to validate
- * @returns {boolean} True if valid UUID v4
+ * @param value - The value to validate
+ * @returns True if valid UUID v4
  */
-export function isValidUUID(value) {
+export function isValidUUID(value: unknown): boolean {
     if (typeof value !== 'string') {
         return false;
     }
@@ -92,10 +96,10 @@ export function isValidUUID(value) {
 
 /**
  * Validates datetime format (YYYY-MM-DD HH:MM:SS)
- * @param {*} value - The value to validate
- * @returns {boolean} True if valid datetime
+ * @param value - The value to validate
+ * @returns True if valid datetime
  */
-export function isValidDatetime(value) {
+export function isValidDatetime(value: unknown): boolean {
     if (typeof value !== 'string') {
         return false;
     }
@@ -125,10 +129,10 @@ export function isValidDatetime(value) {
 
 /**
  * Validates date format (YYYY-MM-DD)
- * @param {*} value - The value to validate
- * @returns {boolean} True if valid date
+ * @param value - The value to validate
+ * @returns True if valid date
  */
-export function isValidDate(value) {
+export function isValidDate(value: unknown): boolean {
     if (typeof value !== 'string') {
         return false;
     }
@@ -153,21 +157,21 @@ export function isValidDate(value) {
 
 /**
  * Validates boolean type
- * @param {*} value - The value to validate
- * @returns {boolean} True if valid boolean
+ * @param value - The value to validate
+ * @returns True if valid boolean
  */
-export function isValidBoolean(value) {
+export function isValidBoolean(value: unknown): boolean {
     return typeof value === 'boolean' || value === 0 || value === 1 || value === '0' || value === '1';
 }
 
 /**
  * Sanitizes database errors and logs them server-side
- * @param {Error} error - The error to sanitize
- * @param {string} operation - The operation that failed (e.g., 'create', 'read')
- * @param {Object} context - Additional context for logging (e.g., { table: 'users' })
- * @returns {string} Sanitized error message safe for client
+ * @param error - The error to sanitize
+ * @param operation - The operation that failed (e.g., 'create', 'read')
+ * @param context - Additional context for logging (e.g., { table: 'users' })
+ * @returns Sanitized error message safe for client
  */
-export function sanitizeError(error, operation, context = {}) {
+export function sanitizeError(error: DbError, operation: string, context: Record<string, unknown> = {}): string {
     // Log full error server-side for debugging
     console.error(`[ts-orm] ${operation} operation failed:`, {
         error: error.message,
