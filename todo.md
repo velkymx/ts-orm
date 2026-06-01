@@ -7,6 +7,41 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
 
 ---
 
+## Code Review — Round 2 (2026-06-01)
+
+Full-project review. Severity-tagged; not yet scheduled into the P-tiers below. No code changed.
+
+### Framework reality check (review items 7 & 8 — "Laravel 13 / The Laravel Way")
+- **Category mismatch.** This is a **Node.js + TypeScript + MySQL2 ORM library**, not a Laravel/PHP application. **"Laravel 13" does not exist** (Laravel is ~v12-era). Laravel/Eloquent practices — Artisan, migrations, Eloquent model classes, relationships, casts, service container — **do not apply to a standalone Node library**, and there is no meaningful "compliance" to score.
+- **What is true:** the public API is *Eloquent-flavored* — `model()`, fluent `where/orWhere/whereLike/whereIn`, `findOrFail`, aggregates, `readWith`. That is the extent of the "Laravel feel".
+- **Divergences from the Eloquent idiom** (not bugs — design): returns `{success,message,data}` envelopes instead of model instances/exceptions; **no relationships / eager loading / casts / soft-deletes / auto timestamps / migrations**. These are roadmap *features* (P4/P5), not defects.
+- **Recommendation:** reframe the goal as an *"Eloquent-inspired Node ORM"*. Scoring it against Laravel will keep producing non-actionable noise.
+
+### HIGH
+- [ ] R1 **CLI hangs after success (regression from A5).** `src/cli.ts:8-13` — `generateStructFromTable` now uses the shared `db.ts` pool, which is never closed, so the event loop stays alive and `vibeorm struct <t>` writes the file then **never exits**. (Pre-A5, `introspect` called `pool.end()`.) Fix: in `cli.ts` success path, `await pool.end()` (export/import it) or `process.exit(0)` after the write.
+- [ ] R2 **`create()` binds `current_timestamp` (and similar keyword defaults) as a literal string.** `src/orm.ts:35` — `payload[f.name] ?? f.default`; when a `datetime` column is omitted, `f.default` is the string `'current_timestamp'` (from introspect) and gets **bound as a parameter**, so MySQL receives the literal text `'current_timestamp'` for a DATETIME → insert error / zero-date. Validator even whitelists this string (`validator.ts:72`), masking it. Fix: omit columns whose resolved value is a server-side default keyword (`'current_timestamp'`, `'auto_increment'`) from the INSERT and let MySQL apply the column default.
+
+### MEDIUM
+- [ ] R3 **Empty `whereIn`/`whereNotIn` → invalid SQL.** `QueryBuilder._buildWhereClause` `in` branch — `[].map(()=>'?').join()` yields `` → `col IN ()`, a MySQL syntax error. Fix: empty `IN` → `0=1`, empty `NOT IN` → `1=1`.
+- [ ] R4 **Inconsistent error contract.** `findOrFail` (`orm.ts:104`) throws; every other op returns `{success:false,...}`. Callers must handle two paths. (Behavioral — flag only; decide intentionally.)
+- [ ] R5 **`introspect.generateStructFromTable` has no try/catch** (`introspect.ts:30`) — raw DB errors (schema/credential detail) propagate unsanitized, unlike every CRUD path. Wrap and route through `sanitizeError`/logger or return a typed failure.
+- [ ] R6 **Limit/offset clause duplicated 4×** (`orm.read`, `orm.readWith`, `QueryBuilder.get`, `QueryBuilder.pluck`) — drift risk; extract one helper (needs sign-off).
+- [ ] R7 **`SELECT *` everywhere; no column projection.** `read`/`get` always fetch all columns (over-fetch); no `.select(cols)`. Perf + bandwidth. (Feature — P4.)
+- [ ] R8 **introspect parsing edges:** `enum('a', 'b')` (space after comma) yields `' b'` (leading space) — `introspect.ts:77`; `decimal(10,2)` length parse keeps only `10`, drops scale — `introspect.ts:60`.
+
+### LOW
+- [ ] R9 Non-finite `limit`/`offset` (e.g. `limit('abc')`) → `LIMIT NaN` → query error instead of being ignored. Guard with `Number.isFinite`. `orm.ts:70-71`, `QueryBuilder.limit/offset`.
+- [ ] R10 Loose types: `ReadOptions.direction: string` should be `'ASC'|'DESC'`; `JoinSpec.on` `[string,string]|string[]` permits wrong-length arrays.
+- [ ] R11 `readOne`/`findOrFail` use 2-space indent vs 4-space elsewhere (`orm.ts:86-112`) — cosmetic.
+- [ ] R12 `QueryBuilder.first()` overwrites any user-set `limit` with `1` (minor surprise).
+
+### Confirmed clean
+- **Security/injection:** identifiers validated+`escapeId`-escaped (table/column/order/join, qualified parts); values fully parameterized; operators allowlisted (S1); `SHOW COLUMNS` table escaped. No injection paths found.
+- **Concurrency:** no shared mutable query state (per-instance builders); module-level pool/logger singletons are swap-only.
+- **N+1:** none in the library (single statements; `readWith` uses JOINs).
+
+---
+
 ## P0 — Critical / Blocker
 
 - None. No active perf regression, security vuln, or broken core logic. (Operator-injection S1 fixed; identifier escaping covers table/column/order/join paths.)
