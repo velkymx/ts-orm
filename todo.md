@@ -11,7 +11,7 @@ Decisions locked:
 ## Cycle 0 — Infrastructure Recovery
 
 - [x] 0.1 Establish `todo.md` as single source of truth.
-- [ ] 0.2 Add `tsconfig.json` (NodeNext, `allowJs`, `checkJs`, `strict`, `noEmit` for typecheck gate).
+- [x] 0.2 Add `tsconfig.json` (NodeNext, `allowJs`, `checkJs` off, `strict`, `noEmit` for typecheck gate). + dependency upgrade to latest (jest held for 0.3).
 - [ ] 0.3 Replace Jest with Vitest; stand up ephemeral real-MySQL harness (mysql-memory-server) via Vitest globalSetup; remove live-DB dependency from existing tests.
 - [ ] 0.4 Wire npm scripts: `test` (vitest run), `typecheck` (tsc --noEmit). Verify existing 61 tests pass against ephemeral MySQL.
 
