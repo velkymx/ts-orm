@@ -11,13 +11,20 @@
     "url": "https://github.com/velkymx/ts-orm/issues"
   },
   "homepage": "https://github.com/velkymx/ts-orm#readme",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "bin": {
     "vibeorm": "bin/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "keywords": [
     "orm",
     "vibe",
@@ -49,7 +56,9 @@
     "vitest": "^4.1.8"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   }
 }
