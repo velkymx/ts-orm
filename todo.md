@@ -10,10 +10,6 @@ Decisions locked:
 
 ---
 
-## P0 — Security (do first)
-
-- [ ] S1 CRITICAL: Whitelist comparison operators in `QueryBuilder` `where`/`orWhere` and all `*Join` builders. Raw operator is interpolated into SQL (injection). Add failing injection test first, then enforce an allowlist.
-
 ## P1 — Correctness (small, high value)
 
 - [ ] S4 Empty `UPDATE` (no matching fields) builds invalid `SET` SQL — guard.

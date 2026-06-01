@@ -18,6 +18,28 @@ function formatResponse(success, message, data = null) {
     return { success, message, data };
 }
 
+// Comparison operators permitted in WHERE / JOIN clauses. The operator occupies
+// a SQL position that cannot be parameterized, so a caller-supplied operator
+// must be validated against this fixed allowlist — otherwise a string such as
+// "0 OR 1=1 OR age <" would be injected verbatim into the query.
+const ALLOWED_OPERATORS = new Set(['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE', 'NOT LIKE']);
+
+/**
+ * Validate a caller-supplied comparison operator, returning its normalized
+ * (uppercase) form. Throws immediately on anything outside the allowlist,
+ * matching the fail-fast input validation already used by whereIn/whereAny.
+ * @param {string} operator
+ * @returns {string} normalized operator
+ * @throws {Error} if the operator is not allowlisted
+ */
+function assertOperator(operator) {
+    const op = String(operator).toUpperCase();
+    if (!ALLOWED_OPERATORS.has(op)) {
+        throw new Error(`Invalid operator: '${operator}'. Allowed: ${[...ALLOWED_OPERATORS].join(', ')}`);
+    }
+    return op;
+}
+
 export class QueryBuilder {
     constructor(table, struct = null) {
         this.table = table;
@@ -50,7 +72,7 @@ export class QueryBuilder {
 
         this._wheres.push({
             field,
-            operator: operator.toUpperCase(),
+            operator: assertOperator(operator),
             value: compareValue,
             boolean: 'AND',
             type: 'basic'
@@ -77,7 +99,7 @@ export class QueryBuilder {
 
         this._wheres.push({
             field,
-            operator: operator.toUpperCase(),
+            operator: assertOperator(operator),
             value: compareValue,
             boolean: 'OR',
             type: 'basic'
@@ -413,7 +435,7 @@ export class QueryBuilder {
             type: 'INNER',
             table,
             firstColumn,
-            operator,
+            operator: assertOperator(operator),
             secondColumn
         });
 
@@ -438,7 +460,7 @@ export class QueryBuilder {
             type: 'LEFT',
             table,
             firstColumn,
-            operator,
+            operator: assertOperator(operator),
             secondColumn
         });
 
@@ -463,7 +485,7 @@ export class QueryBuilder {
             type: 'RIGHT',
             table,
             firstColumn,
-            operator,
+            operator: assertOperator(operator),
             secondColumn
         });
 

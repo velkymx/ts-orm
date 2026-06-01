@@ -344,3 +344,33 @@ describe('Model API Tests', () => {
     });
   });
 });
+
+describe('Security - operator allowlist (S1)', () => {
+  // The comparison operator sits in a non-parameterizable SQL position, so a
+  // caller-supplied operator string must be rejected up front. These prove the
+  // injection vector is closed and that legitimate operators still pass.
+
+  test('where() throws on a non-whitelisted operator (blocks injection)', () => {
+    expect(() => User.where('age', '0 OR 1=1 OR age <', 5)).toThrow(/Invalid operator/);
+  });
+
+  test('query().where() throws on an injected operator', () => {
+    expect(() => User.query().where('age', 'OR 1=1 --', 5)).toThrow(/Invalid operator/);
+  });
+
+  test('orWhere() throws on a non-whitelisted operator', () => {
+    expect(() => User.query().where('age', '>', 1).orWhere('age', 'OR 1=1', 2))
+      .toThrow(/Invalid operator/);
+  });
+
+  test('innerJoin() throws on a non-whitelisted operator', () => {
+    expect(() => User.query().innerJoin('model_test', 'model_test.id', 'OR 1=1', 'model_test.id'))
+      .toThrow(/Invalid operator/);
+  });
+
+  test('legitimate operators are still accepted', () => {
+    expect(() => User.where('age', '>=', 1)).not.toThrow();
+    expect(() => User.where('status', 'active')).not.toThrow();
+    expect(() => User.query().where('name', 'LIKE', '%a%')).not.toThrow();
+  });
+});
