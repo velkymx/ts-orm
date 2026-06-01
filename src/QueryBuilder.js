@@ -6,6 +6,9 @@ dotenv.config();
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
+    // Honor a configurable port; falls back to MySQL's default 3306 when unset.
+    // Required so the suite can target an ephemeral mysqld on a random port.
+    port: Number(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE
@@ -618,8 +621,13 @@ export class QueryBuilder {
                 ? `ORDER BY ${validateAndEscapeIdentifier(this._orderBy, 'order by column')} ${this._direction}`
                 : '';
 
-            const limitClause = this._limit ? `LIMIT ${this._limit}` : '';
-            const offsetClause = this._offset ? `OFFSET ${this._offset}` : '';
+            // != null so an explicit limit/offset of 0 is honored. MySQL requires
+            // LIMIT to precede OFFSET, so when an offset is given without a limit
+            // we prepend the documented max-row sentinel (2^64 - 1).
+            const limitClause = this._limit != null ? `LIMIT ${this._limit}` : '';
+            const offsetClause = this._offset != null
+                ? (this._limit != null ? `OFFSET ${this._offset}` : `LIMIT 18446744073709551615 OFFSET ${this._offset}`)
+                : '';
 
             const sql = `SELECT ${safeField} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
@@ -648,8 +656,13 @@ export class QueryBuilder {
                 ? `ORDER BY ${validateAndEscapeIdentifier(this._orderBy, 'order by column')} ${this._direction}`
                 : '';
 
-            const limitClause = this._limit ? `LIMIT ${this._limit}` : '';
-            const offsetClause = this._offset ? `OFFSET ${this._offset}` : '';
+            // != null so an explicit limit/offset of 0 is honored. MySQL requires
+            // LIMIT to precede OFFSET, so when an offset is given without a limit
+            // we prepend the documented max-row sentinel (2^64 - 1).
+            const limitClause = this._limit != null ? `LIMIT ${this._limit}` : '';
+            const offsetClause = this._offset != null
+                ? (this._limit != null ? `OFFSET ${this._offset}` : `LIMIT 18446744073709551615 OFFSET ${this._offset}`)
+                : '';
 
             const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
@@ -755,7 +768,15 @@ export class QueryBuilder {
             const sql = `SELECT ${func}(${safeField}) as result FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
             const [rows] = await pool.execute(sql, bindings);
-            return formatResponse(true, `${func} retrieved`, rows[0].result);
+
+            // mysql2 returns DECIMAL aggregates (SUM/AVG) as strings to avoid
+            // float precision loss. Coerce numeric-looking results to Number so
+            // callers get numbers; leave non-numeric results (e.g. MAX of a date
+            // or text column) and null untouched.
+            const raw = rows[0].result;
+            const value = raw === null || Number.isNaN(Number(raw)) ? raw : Number(raw);
+
+            return formatResponse(true, `${func} retrieved`, value);
         } catch (error) {
             return formatResponse(false, 'Database operation failed', sanitizeError(error, func.toLowerCase(), { table: this.table }));
         }

@@ -18,6 +18,11 @@ export function validatePayload(struct, payload, options = {}) {
 
         // Fix: Allow falsy values like false, 0, but reject undefined/null for required fields
         if (field.required && (value === undefined || value === null)) {
+            // Partial updates only write the columns actually provided, so an
+            // absent (undefined) required field is left as-is instead of being
+            // flagged missing. An explicit null still errors, since that would
+            // attempt to NULL a required column.
+            if (options.partial && value === undefined) continue;
             errors.push(`${field.name} is required`);
             continue;
         }

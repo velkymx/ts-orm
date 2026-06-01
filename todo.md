@@ -12,13 +12,13 @@ Decisions locked:
 
 - [x] 0.1 Establish `todo.md` as single source of truth.
 - [x] 0.2 Add `tsconfig.json` (NodeNext, `allowJs`, `checkJs` off, `strict`, `noEmit` for typecheck gate). + dependency upgrade to latest (jest held for 0.3).
-- [ ] 0.3 Replace Jest with Vitest; stand up ephemeral real-MySQL harness (mysql-memory-server) via Vitest globalSetup; remove live-DB dependency from existing tests.
-- [ ] 0.4 Wire npm scripts: `test` (vitest run), `typecheck` (tsc --noEmit). Verify existing 61 tests pass against ephemeral MySQL.
+- [x] 0.3 Replace Jest with Vitest; stand up ephemeral real-MySQL harness (mysql-memory-server, pinned 8.0.40) via Vitest globalSetup; remove live-DB dependency. NOTE: src pools + test connections now honor `DB_PORT`.
+- [x] 0.4 Wire npm scripts: `test` (vitest run), `typecheck` (tsc --noEmit). 61/61 pass against ephemeral MySQL; typecheck green.
 
 ## Security / correctness (from review — exploitable now, do before migration)
 
 - [ ] S1 CRITICAL: Whitelist comparison operators in `QueryBuilder` `where`/`orWhere` and all `*Join` builders. Raw operator is interpolated into SQL (injection). Add failing test first.
-- [ ] S2 HIGH: `OFFSET` emitted without `LIMIT` is invalid MySQL. Fix limit/offset clause in `QueryBuilder` + `orm.read`/`readWith`.
+- [x] S2 HIGH: `OFFSET` without `LIMIT` fixed (max-row sentinel) in `QueryBuilder` get/pluck + `orm.read`/`readWith`. Also honors explicit `0` (covers S3).
 
 ## TypeScript migration (incremental, one file per commit)
 
@@ -42,4 +42,7 @@ Decisions locked:
 
 ## Done
 
-(none yet)
+- B1: `model.where()` no longer forwards `undefined` as a 3rd arg (was making the value parse as the SQL operator). Fixed via arguments.length guard.
+- B2: `QueryBuilder._aggregate` coerces numeric DECIMAL strings (SUM/AVG) to Number; leaves non-numeric (MAX/MIN of date/text) and null untouched.
+- B3: `update()` validates with `{ partial: true }` so absent required columns are not flagged (partial-update semantics); explicit null on a required column still errors.
+- S3 (incidental): limit/offset now use `!= null`, honoring explicit `0`.

@@ -20,6 +20,9 @@ const typeMap = {
 export async function generateStructFromTable(table) {
   const pool = mysql.createPool({
     host: process.env.DB_HOST,
+    // Honor a configurable port; falls back to MySQL's default 3306 when unset.
+    // Required so the suite can target an ephemeral mysqld on a random port.
+    port: Number(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE

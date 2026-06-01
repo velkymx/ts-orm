@@ -70,8 +70,14 @@ export function model(table, struct, options = {}) {
                 return builder;
             }
 
-            // Otherwise, treat as field, operator, value
-            return builder.where(fieldOrConditions, operatorOrValue, value);
+            // Forward only the arguments actually received. QueryBuilder.where
+            // uses arguments.length to distinguish where(field, value) from
+            // where(field, operator, value); passing `value` as an explicit
+            // third argument here (undefined in the 2-arg case) would make it
+            // misread the value as the operator and emit invalid SQL.
+            return arguments.length >= 3
+                ? builder.where(fieldOrConditions, operatorOrValue, value)
+                : builder.where(fieldOrConditions, operatorOrValue);
         },
 
         /**

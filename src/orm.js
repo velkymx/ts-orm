@@ -7,6 +7,9 @@ dotenv.config();
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
+    // Honor a configurable port; falls back to MySQL's default 3306 when unset.
+    // Required so the suite can target an ephemeral mysqld on a random port.
+    port: Number(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE
@@ -60,8 +63,14 @@ export async function read(table, conditions = {}, options = {}) {
             ? `ORDER BY ${validateAndEscapeIdentifier(options.orderBy, 'order by column')} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
             : '';
 
-        const limitClause = options.limit ? `LIMIT ${Number.parseInt(options.limit, 10)}` : '';
-        const offsetClause = options.offset ? `OFFSET ${Number.parseInt(options.offset, 10)}` : '';
+        // MySQL requires LIMIT before OFFSET; emit the max-row sentinel when an
+        // offset is supplied without a limit. != null honors an explicit 0.
+        const limit = options.limit != null ? Number.parseInt(options.limit, 10) : null;
+        const offset = options.offset != null ? Number.parseInt(options.offset, 10) : null;
+        const limitClause = limit != null ? `LIMIT ${limit}` : '';
+        const offsetClause = offset != null
+            ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
+            : '';
 
         const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
@@ -152,8 +161,14 @@ export async function readOne(table, conditions = {}) {
             }
         }
 
-        const limitClause = options.limit ? `LIMIT ${Number.parseInt(options.limit, 10)}` : '';
-        const offsetClause = options.offset ? `OFFSET ${Number.parseInt(options.offset, 10)}` : '';
+        // MySQL requires LIMIT before OFFSET; emit the max-row sentinel when an
+        // offset is supplied without a limit. != null honors an explicit 0.
+        const limit = options.limit != null ? Number.parseInt(options.limit, 10) : null;
+        const offset = options.offset != null ? Number.parseInt(options.offset, 10) : null;
+        const limitClause = limit != null ? `LIMIT ${limit}` : '';
+        const offsetClause = offset != null
+            ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
+            : '';
 
         const sql = `SELECT * FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
 
@@ -170,7 +185,9 @@ export async function readOne(table, conditions = {}) {
  
 
 export async function update(table, struct, payload, idKey = 'id') {
-    const errors = validatePayload(struct, payload);
+    // Updates are partial by nature (only provided columns are written), so
+    // required fields that are absent from the payload must not fail validation.
+    const errors = validatePayload(struct, payload, { partial: true });
     if (errors.length) return formatResponse(false, 'Validation failed', errors);
 
     try {
