@@ -4,6 +4,9 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Removed
+- **A1** Dropped the `uuid` runtime dependency — `src` never generated UUIDs (only validates them). Tests now use Node's built-in `crypto.randomUUID()`. Removes ~304K from consumer installs; runtime deps are now just `dotenv` + `mysql2`.
+
 ### Added
 - CI: `Node.js CI` workflow runs `build` + `typecheck` + `test` on every push/PR on Node 24 (actions checkout@v5/setup-node@v5), using a MySQL 8.0 service container. The Vitest `globalSetup` now uses a provided DB (via `DB_HOST`/`DB_PORT`) when set, falling back to the local ephemeral server otherwise.
 - `todo.md` task backlog as single source of truth.

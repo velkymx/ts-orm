@@ -9,7 +9,7 @@ import {
 } from '../src/orm.js';
 import { validatePayload } from '../src/validator.js';
 import mysql from 'mysql2/promise';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -159,7 +159,7 @@ describe('Security Tests', () => {
   test('Validates datetime format', async () => {
     const res = await create(table, struct, {
       ...basePayload,
-      id: uuidv4(),
+      id: randomUUID(),
       date_created: 'invalid-date'
     });
     expect(res.success).toBe(false);
@@ -169,7 +169,7 @@ describe('Security Tests', () => {
   test('Validates date format', async () => {
     const testPayload = {
       ...basePayload,
-      id: uuidv4(),
+      id: randomUUID(),
       date_due: '2025/04/07' // Wrong format
     };
     const res = await create(table, struct, testPayload);
@@ -180,7 +180,7 @@ describe('Security Tests', () => {
   test('Validates boolean type', async () => {
     const testPayload = {
       ...basePayload,
-      id: uuidv4(),
+      id: randomUUID(),
       opt_shareclient: 'not-a-boolean'
     };
     const res = await create(table, struct, testPayload);
@@ -203,7 +203,7 @@ describe('Security Tests', () => {
   test('Rejects update with no updatable fields (avoids invalid SET SQL)', async () => {
     // Only the id key is supplied, so there is nothing to SET. Must fail cleanly
     // rather than emitting `UPDATE ... SET  WHERE id = ?` (a SQL parse error).
-    const res = await update(table, struct, { id: uuidv4() });
+    const res = await update(table, struct, { id: randomUUID() });
     expect(res.success).toBe(false);
     expect(res.message).toBe('No fields to update');
   });
@@ -211,7 +211,7 @@ describe('Security Tests', () => {
   test('Allows null for non-required enum field', async () => {
     const testPayload = {
       ...basePayload,
-      id: uuidv4(),
+      id: randomUUID(),
       commission_type: null,
       opt_shareclient: false
     };
@@ -226,7 +226,7 @@ describe('Security Tests', () => {
 });
 
 const basePayload = {
-  id: uuidv4(),
+  id: randomUUID(),
   name: "Test Record",
   json: JSON.stringify({ key: "value" }),
   related_forms: "form1,form2",
@@ -237,8 +237,8 @@ const basePayload = {
 };
 
 describe('ts-orm CRUD operations', () => {
-  const testId = uuidv4();
-  const relatedId = uuidv4();
+  const testId = randomUUID();
+  const relatedId = randomUUID();
 
   const crudPayload = {
     id: testId,
@@ -267,7 +267,7 @@ describe('ts-orm CRUD operations', () => {
 
   test('Insert multiple records for pagination', async () => {
     for (let i = 0; i < 5; i++) {
-      const id = uuidv4();
+      const id = randomUUID();
       const payload = {
         ...crudPayload,
         id,

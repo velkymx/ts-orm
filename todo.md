@@ -13,14 +13,6 @@ Locked decisions: prod driver = mysql2 (MySQL-only); tests = ephemeral real MySQ
 
 ## P1 — High
 
-- [ ] A1 **Dependency bloat: `uuid` is a prod dependency but never imported by `src`.**
-  - File: `package.json:42` (`dependencies.uuid`). Usage: `tests/*.mjs` only (`grep -rn uuid src` → none; `src` uses the *string* `'uuid'` as a field-type literal, not the package).
-  - Coverage delta: n/a.
-  - Resolution: move to devDependencies — ships ~304K + transitive to every consumer for zero runtime value.
-    ```bash
-    npm pkg delete dependencies.uuid && npm pkg set devDependencies.uuid="^14.0.0" && npm install
-    ```
-
 - [ ] A2 **Test coverage gaps in core query paths (0 coverage on 18 builder methods + 3 model methods).**
   - File: `src/QueryBuilder.ts` — untested: `whereNot, whereLike, orWhereLike, whereNotLike, orWhereNotLike, orWhereNot, whereAny, whereAll, whereNone, orWhereIn, whereNotIn(direct), orWhereNull, orWhereNotNull, leftJoin, rightJoin, outerJoin, pluck, clone`; `innerJoin` has only the operator-throw test (no functional JOIN result asserted). `src/model.ts` — `pluck, deleteWhere, readWith` untested.
   - Coverage delta: the entire JOIN builder family and `whereAny/All/All/None` emit SQL with `validateAndEscapeIdentifier` on caller input — security-relevant escaping is currently unverified.

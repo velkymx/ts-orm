@@ -1,6 +1,6 @@
 import { model } from '../src/model.js';
 import mysql from 'mysql2/promise';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -64,7 +64,7 @@ describe('Model API Tests', () => {
 
     // Create test data
     for (let i = 0; i < 10; i++) {
-      const id = uuidv4();
+      const id = randomUUID();
       testUsers.push({
         id,
         name: `User ${i}`,
@@ -113,7 +113,7 @@ describe('Model API Tests', () => {
 
     test('create() - insert new record', async () => {
       const newUser = {
-        id: uuidv4(),
+        id: randomUUID(),
         name: 'New User',
         email: 'new@example.com',
         status: 'active',
@@ -137,7 +137,7 @@ describe('Model API Tests', () => {
     });
 
     test('delete() - remove record', async () => {
-      const tempId = uuidv4();
+      const tempId = randomUUID();
       await User.create({
         id: tempId,
         name: 'Temp User',
