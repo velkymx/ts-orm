@@ -12,7 +12,6 @@ Decisions locked:
 
 ## P2 — TypeScript migration (incremental, one file per commit)
 
-- [ ] M4 `src/QueryBuilder.js` -> `.ts`.
 - [ ] M5 `src/orm.js` -> `.ts`.
 - [ ] M6 `src/model.js` -> `.ts`.
 - [ ] M7 `src/index.js` + `bin/cli.js` -> `.ts`; add build step (`tsc` -> `dist`); update `package.json` exports/`types`/`bin`.

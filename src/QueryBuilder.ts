@@ -1,6 +1,8 @@
 import mysql from 'mysql2/promise';
+import type { RowDataPacket } from 'mysql2';
 import dotenv from 'dotenv';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
+import type { Field } from './validator.js';
 
 dotenv.config();
 
@@ -14,8 +16,35 @@ const pool = mysql.createPool({
     database: process.env.DB_DATABASE
 });
 
-function formatResponse(success, message, data = null) {
+// Standard envelope returned by every data operation.
+export interface OrmResponse<T = unknown> {
+    success: boolean;
+    message: string;
+    data: T;
+}
+
+function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
     return { success, message, data };
+}
+
+// Internal representation of an accumulated WHERE condition. `field` is used by
+// single-column conditions; `fields` by the any/all/none multi-column variants.
+type WhereType = 'basic' | 'in' | 'null' | 'any' | 'all' | 'none';
+interface WhereClause {
+    field?: string;
+    fields?: string[];
+    operator: string;
+    value?: unknown;
+    boolean: 'AND' | 'OR';
+    type: WhereType;
+}
+
+interface JoinClause {
+    type: 'INNER' | 'LEFT' | 'RIGHT';
+    table: string;
+    firstColumn: string;
+    operator: string;
+    secondColumn: string;
 }
 
 // Comparison operators permitted in WHERE / JOIN clauses. The operator occupies
@@ -28,11 +57,8 @@ const ALLOWED_OPERATORS = new Set(['=', '!=', '<>', '>', '<', '>=', '<=', 'LIKE'
  * Validate a caller-supplied comparison operator, returning its normalized
  * (uppercase) form. Throws immediately on anything outside the allowlist,
  * matching the fail-fast input validation already used by whereIn/whereAny.
- * @param {string} operator
- * @returns {string} normalized operator
- * @throws {Error} if the operator is not allowlisted
  */
-function assertOperator(operator) {
+function assertOperator(operator: unknown): string {
     const op = String(operator).toUpperCase();
     if (!ALLOWED_OPERATORS.has(op)) {
         throw new Error(`Invalid operator: '${operator}'. Allowed: ${[...ALLOWED_OPERATORS].join(', ')}`);
@@ -41,7 +67,17 @@ function assertOperator(operator) {
 }
 
 export class QueryBuilder {
-    constructor(table, struct = null) {
+    table: string;
+    struct: Field[] | null;
+    private _wheres: WhereClause[];
+    private _joins: JoinClause[];
+    private _orderBy: string | null;
+    private _direction: 'ASC' | 'DESC';
+    private _limit: number | null;
+    private _offset: number | null;
+    private _select: string;
+
+    constructor(table: string, struct: Field[] | null = null) {
         this.table = table;
         this.struct = struct;
         this._wheres = [];
@@ -54,14 +90,11 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE clause
-     * @param {string} field - Column name
-     * @param {string|*} operatorOrValue - Operator ('=', '>', '<', '>=', '<=', '!=', 'LIKE') or value if 2 args
-     * @param {*} value - Value to compare (optional if operator is omitted)
-     * @returns {QueryBuilder}
+     * Add a WHERE clause. Supports where(field, value) and
+     * where(field, operator, value).
      */
-    where(field, operatorOrValue, value = null) {
-        let operator = '=';
+    where(field: string, operatorOrValue?: unknown, value: unknown = null): this {
+        let operator: unknown = '=';
         let compareValue = operatorOrValue;
 
         // Handle both where(field, value) and where(field, operator, value)
@@ -82,14 +115,10 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE clause
-     * @param {string} field
-     * @param {string|*} operatorOrValue
-     * @param {*} value
-     * @returns {QueryBuilder}
+     * Add an OR WHERE clause.
      */
-    orWhere(field, operatorOrValue, value = null) {
-        let operator = '=';
+    orWhere(field: string, operatorOrValue?: unknown, value: unknown = null): this {
+        let operator: unknown = '=';
         let compareValue = operatorOrValue;
 
         if (arguments.length === 3) {
@@ -109,12 +138,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE NOT clause (field != value)
-     * @param {string} field
-     * @param {*} value
-     * @returns {QueryBuilder}
+     * Add a WHERE NOT clause (field != value).
      */
-    whereNot(field, value) {
+    whereNot(field: string, value: unknown): this {
         this._wheres.push({
             field,
             operator: '!=',
@@ -127,12 +153,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE LIKE clause
-     * @param {string} field - Column name
-     * @param {string} pattern - LIKE pattern (use % for wildcards)
-     * @returns {QueryBuilder}
+     * Add a WHERE LIKE clause.
      */
-    whereLike(field, pattern) {
+    whereLike(field: string, pattern: string): this {
         this._wheres.push({
             field,
             operator: 'LIKE',
@@ -145,12 +168,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE LIKE clause
-     * @param {string} field - Column name
-     * @param {string} pattern - LIKE pattern (use % for wildcards)
-     * @returns {QueryBuilder}
+     * Add an OR WHERE LIKE clause.
      */
-    orWhereLike(field, pattern) {
+    orWhereLike(field: string, pattern: string): this {
         this._wheres.push({
             field,
             operator: 'LIKE',
@@ -163,12 +183,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE NOT LIKE clause
-     * @param {string} field - Column name
-     * @param {string} pattern - LIKE pattern (use % for wildcards)
-     * @returns {QueryBuilder}
+     * Add a WHERE NOT LIKE clause.
      */
-    whereNotLike(field, pattern) {
+    whereNotLike(field: string, pattern: string): this {
         this._wheres.push({
             field,
             operator: 'NOT LIKE',
@@ -181,12 +198,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE NOT LIKE clause
-     * @param {string} field - Column name
-     * @param {string} pattern - LIKE pattern (use % for wildcards)
-     * @returns {QueryBuilder}
+     * Add an OR WHERE NOT LIKE clause.
      */
-    orWhereNotLike(field, pattern) {
+    orWhereNotLike(field: string, pattern: string): this {
         this._wheres.push({
             field,
             operator: 'NOT LIKE',
@@ -199,12 +213,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE NOT clause
-     * @param {string} field
-     * @param {*} value
-     * @returns {QueryBuilder}
+     * Add an OR WHERE NOT clause.
      */
-    orWhereNot(field, value) {
+    orWhereNot(field: string, value: unknown): this {
         this._wheres.push({
             field,
             operator: '!=',
@@ -217,12 +228,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE clause checking if value matches ANY of the given columns
-     * @param {Array<string>} fields - Array of column names
-     * @param {*} value - Value to match against
-     * @returns {QueryBuilder}
+     * Add a WHERE clause checking if value matches ANY of the given columns.
      */
-    whereAny(fields, value) {
+    whereAny(fields: string[], value: unknown): this {
         if (!Array.isArray(fields) || fields.length === 0) {
             throw new Error('whereAny requires an array of field names');
         }
@@ -239,12 +247,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE clause checking if value matches ALL of the given columns
-     * @param {Array<string>} fields - Array of column names
-     * @param {*} value - Value to match against
-     * @returns {QueryBuilder}
+     * Add a WHERE clause checking if value matches ALL of the given columns.
      */
-    whereAll(fields, value) {
+    whereAll(fields: string[], value: unknown): this {
         if (!Array.isArray(fields) || fields.length === 0) {
             throw new Error('whereAll requires an array of field names');
         }
@@ -261,12 +266,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE clause checking if value matches NONE of the given columns
-     * @param {Array<string>} fields - Array of column names
-     * @param {*} value - Value to match against
-     * @returns {QueryBuilder}
+     * Add a WHERE clause checking if value matches NONE of the given columns.
      */
-    whereNone(fields, value) {
+    whereNone(fields: string[], value: unknown): this {
         if (!Array.isArray(fields) || fields.length === 0) {
             throw new Error('whereNone requires an array of field names');
         }
@@ -283,12 +285,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE IN clause
-     * @param {string} field
-     * @param {Array} values
-     * @returns {QueryBuilder}
+     * Add a WHERE IN clause.
      */
-    whereIn(field, values) {
+    whereIn(field: string, values: unknown[]): this {
         if (!Array.isArray(values)) {
             throw new Error('whereIn requires an array of values');
         }
@@ -305,12 +304,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE IN clause
-     * @param {string} field
-     * @param {Array} values
-     * @returns {QueryBuilder}
+     * Add an OR WHERE IN clause.
      */
-    orWhereIn(field, values) {
+    orWhereIn(field: string, values: unknown[]): this {
         if (!Array.isArray(values)) {
             throw new Error('orWhereIn requires an array of values');
         }
@@ -327,12 +323,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE NOT IN clause
-     * @param {string} field
-     * @param {Array} values
-     * @returns {QueryBuilder}
+     * Add a WHERE NOT IN clause.
      */
-    whereNotIn(field, values) {
+    whereNotIn(field: string, values: unknown[]): this {
         if (!Array.isArray(values)) {
             throw new Error('whereNotIn requires an array of values');
         }
@@ -349,11 +342,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE NULL clause
-     * @param {string} field
-     * @returns {QueryBuilder}
+     * Add a WHERE NULL clause.
      */
-    whereNull(field) {
+    whereNull(field: string): this {
         this._wheres.push({
             field,
             operator: 'IS NULL',
@@ -366,11 +357,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add a WHERE NOT NULL clause
-     * @param {string} field
-     * @returns {QueryBuilder}
+     * Add a WHERE NOT NULL clause.
      */
-    whereNotNull(field) {
+    whereNotNull(field: string): this {
         this._wheres.push({
             field,
             operator: 'IS NOT NULL',
@@ -383,11 +372,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE NULL clause
-     * @param {string} field
-     * @returns {QueryBuilder}
+     * Add an OR WHERE NULL clause.
      */
-    orWhereNull(field) {
+    orWhereNull(field: string): this {
         this._wheres.push({
             field,
             operator: 'IS NULL',
@@ -400,11 +387,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an OR WHERE NOT NULL clause
-     * @param {string} field
-     * @returns {QueryBuilder}
+     * Add an OR WHERE NOT NULL clause.
      */
-    orWhereNotNull(field) {
+    orWhereNotNull(field: string): this {
         this._wheres.push({
             field,
             operator: 'IS NOT NULL',
@@ -417,14 +402,11 @@ export class QueryBuilder {
     }
 
     /**
-     * Add an INNER JOIN clause
-     * @param {string} table - Table to join
-     * @param {string} firstColumn - First column in join condition (can be qualified: table.column)
-     * @param {string} operator - Comparison operator (default '=')
-     * @param {string} secondColumn - Second column in join condition (can be qualified: table.column)
-     * @returns {QueryBuilder}
+     * Add an INNER JOIN clause. Supports innerJoin(table, col1, col2) and
+     * innerJoin(table, col1, operator, col2). Columns may be qualified
+     * (table.column).
      */
-    innerJoin(table, firstColumn, operator = '=', secondColumn = null) {
+    innerJoin(table: string, firstColumn: string, operator: string = '=', secondColumn: string | null = null): this {
         // Handle both innerJoin(table, col1, col2) and innerJoin(table, col1, '=', col2)
         if (arguments.length === 3) {
             secondColumn = operator;
@@ -436,21 +418,16 @@ export class QueryBuilder {
             table,
             firstColumn,
             operator: assertOperator(operator),
-            secondColumn
+            secondColumn: secondColumn as string
         });
 
         return this;
     }
 
     /**
-     * Add a LEFT JOIN clause
-     * @param {string} table - Table to join
-     * @param {string} firstColumn - First column in join condition
-     * @param {string} operator - Comparison operator (default '=')
-     * @param {string} secondColumn - Second column in join condition
-     * @returns {QueryBuilder}
+     * Add a LEFT JOIN clause.
      */
-    leftJoin(table, firstColumn, operator = '=', secondColumn = null) {
+    leftJoin(table: string, firstColumn: string, operator: string = '=', secondColumn: string | null = null): this {
         if (arguments.length === 3) {
             secondColumn = operator;
             operator = '=';
@@ -461,21 +438,16 @@ export class QueryBuilder {
             table,
             firstColumn,
             operator: assertOperator(operator),
-            secondColumn
+            secondColumn: secondColumn as string
         });
 
         return this;
     }
 
     /**
-     * Add a RIGHT JOIN clause (outer join)
-     * @param {string} table - Table to join
-     * @param {string} firstColumn - First column in join condition
-     * @param {string} operator - Comparison operator (default '=')
-     * @param {string} secondColumn - Second column in join condition
-     * @returns {QueryBuilder}
+     * Add a RIGHT JOIN clause (outer join).
      */
-    rightJoin(table, firstColumn, operator = '=', secondColumn = null) {
+    rightJoin(table: string, firstColumn: string, operator: string = '=', secondColumn: string | null = null): this {
         if (arguments.length === 3) {
             secondColumn = operator;
             operator = '=';
@@ -486,83 +458,72 @@ export class QueryBuilder {
             table,
             firstColumn,
             operator: assertOperator(operator),
-            secondColumn
+            secondColumn: secondColumn as string
         });
 
         return this;
     }
 
     /**
-     * Alias for rightJoin
-     * @param {string} table
-     * @param {string} firstColumn
-     * @param {string} operator
-     * @param {string} secondColumn
-     * @returns {QueryBuilder}
+     * Alias for rightJoin.
      */
-    outerJoin(table, firstColumn, operator = '=', secondColumn = null) {
+    outerJoin(table: string, firstColumn: string, operator: string = '=', secondColumn: string | null = null): this {
         return this.rightJoin(table, firstColumn, operator, secondColumn);
     }
 
     /**
-     * Set ORDER BY clause
-     * @param {string} field
-     * @param {string} direction - 'ASC' or 'DESC'
-     * @returns {QueryBuilder}
+     * Set ORDER BY clause.
      */
-    orderBy(field, direction = 'ASC') {
+    orderBy(field: string, direction: string = 'ASC'): this {
         this._orderBy = field;
         this._direction = direction.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
         return this;
     }
 
     /**
-     * Set LIMIT clause
-     * @param {number} limit
-     * @returns {QueryBuilder}
+     * Set LIMIT clause.
      */
-    limit(limit) {
-        this._limit = Number.parseInt(limit, 10);
+    limit(limit: number): this {
+        this._limit = Number.parseInt(String(limit), 10);
         return this;
     }
 
     /**
-     * Set OFFSET clause
-     * @param {number} offset
-     * @returns {QueryBuilder}
+     * Set OFFSET clause.
      */
-    offset(offset) {
-        this._offset = Number.parseInt(offset, 10);
+    offset(offset: number): this {
+        this._offset = Number.parseInt(String(offset), 10);
         return this;
     }
 
     /**
-     * Build the WHERE clause SQL and bindings
-     * @returns {{ sql: string, bindings: Array }}
-     * @private
+     * Build the WHERE clause SQL and bindings.
      */
-    _buildWhereClause() {
+    private _buildWhereClause(): { sql: string; bindings: any[] } {
         if (this._wheres.length === 0) {
             return { sql: '', bindings: [] };
         }
 
-        const whereParts = [];
-        const bindings = [];
+        const whereParts: string[] = [];
+        // any[]: mysql2's execute() binds via its ExecuteValues type; values here
+        // originate from caller payloads of unknown shape.
+        const bindings: any[] = [];
 
         this._wheres.forEach((where, index) => {
             const boolean = index === 0 ? '' : ` ${where.boolean} `;
 
             if (where.type === 'null') {
-                const safeField = validateAndEscapeIdentifier(where.field, 'column name');
+                const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
                 whereParts.push(`${boolean}${safeField} ${where.operator}`);
             } else if (where.type === 'in') {
-                const safeField = validateAndEscapeIdentifier(where.field, 'column name');
-                const placeholders = where.value.map(() => '?').join(', ');
+                const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
+                const inValues = where.value as unknown[];
+                const placeholders = inValues.map(() => '?').join(', ');
                 whereParts.push(`${boolean}${safeField} ${where.operator} (${placeholders})`);
-                bindings.push(...where.value);
+                bindings.push(...inValues);
             } else if (where.type === 'any') {
                 // WHERE (col1 = ? OR col2 = ? OR col3 = ?)
-                const conditions = where.fields.map(field => {
+                const conditions = where.fields!.map(field => {
                     const safeField = validateAndEscapeIdentifier(field, 'column name');
                     bindings.push(where.value);
                     return `${safeField} ${where.operator} ?`;
@@ -570,7 +531,7 @@ export class QueryBuilder {
                 whereParts.push(`${boolean}(${conditions})`);
             } else if (where.type === 'all') {
                 // WHERE (col1 = ? AND col2 = ? AND col3 = ?)
-                const conditions = where.fields.map(field => {
+                const conditions = where.fields!.map(field => {
                     const safeField = validateAndEscapeIdentifier(field, 'column name');
                     bindings.push(where.value);
                     return `${safeField} ${where.operator} ?`;
@@ -578,7 +539,7 @@ export class QueryBuilder {
                 whereParts.push(`${boolean}(${conditions})`);
             } else if (where.type === 'none') {
                 // WHERE (col1 != ? AND col2 != ? AND col3 != ?)
-                const conditions = where.fields.map(field => {
+                const conditions = where.fields!.map(field => {
                     const safeField = validateAndEscapeIdentifier(field, 'column name');
                     bindings.push(where.value);
                     return `${safeField} ${where.operator} ?`;
@@ -586,7 +547,7 @@ export class QueryBuilder {
                 whereParts.push(`${boolean}(${conditions})`);
             } else {
                 // Basic comparison
-                const safeField = validateAndEscapeIdentifier(where.field, 'column name');
+                const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
                 whereParts.push(`${boolean}${safeField} ${where.operator} ?`);
                 bindings.push(where.value);
             }
@@ -599,11 +560,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Build the JOIN clause SQL
-     * @returns {string}
-     * @private
+     * Build the JOIN clause SQL.
      */
-    _buildJoinClause() {
+    private _buildJoinClause(): string {
         if (this._joins.length === 0) {
             return '';
         }
@@ -612,7 +571,7 @@ export class QueryBuilder {
             const safeTable = validateAndEscapeIdentifier(join.table, 'join table name');
 
             // Handle qualified column names (table.column)
-            const parseColumn = (col) => {
+            const parseColumn = (col: string): string => {
                 if (col.includes('.')) {
                     const [tbl, field] = col.split('.');
                     return `${validateAndEscapeIdentifier(tbl, 'table name')}.${validateAndEscapeIdentifier(field, 'column name')}`;
@@ -628,11 +587,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Pluck a single column's values as an array
-     * @param {string} field - Column name to pluck
-     * @returns {Promise<Object>}
+     * Pluck a single column's values as an array.
      */
-    async pluck(field) {
+    async pluck(field: string): Promise<OrmResponse> {
         try {
             const safeTable = validateAndEscapeIdentifier(this.table, 'table name');
             const safeField = validateAndEscapeIdentifier(field, 'column name');
@@ -656,19 +613,18 @@ export class QueryBuilder {
             const [rows] = await pool.execute(sql, bindings);
 
             // Extract just the values from the result rows
-            const values = rows.map(row => row[field]);
+            const values = (rows as RowDataPacket[]).map(row => row[field]);
 
             return formatResponse(true, 'Data retrieved', values);
         } catch (error) {
-            return formatResponse(false, 'Database operation failed', sanitizeError(error, 'pluck', { table: this.table }));
+            return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'pluck', { table: this.table }));
         }
     }
 
     /**
-     * Execute query and return all results
-     * @returns {Promise<Object>}
+     * Execute query and return all results.
      */
-    async get() {
+    async get(): Promise<OrmResponse> {
         try {
             const safeTable = validateAndEscapeIdentifier(this.table, 'table name');
             const joinClause = this._buildJoinClause();
@@ -691,15 +647,14 @@ export class QueryBuilder {
             const [rows] = await pool.execute(sql, bindings);
             return formatResponse(true, 'Data retrieved', rows);
         } catch (error) {
-            return formatResponse(false, 'Database operation failed', sanitizeError(error, 'get', { table: this.table }));
+            return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'get', { table: this.table }));
         }
     }
 
     /**
-     * Execute query and return first result
-     * @returns {Promise<Object>}
+     * Execute query and return first result.
      */
-    async first() {
+    async first(): Promise<OrmResponse> {
         this._limit = 1;
         const result = await this.get();
 
@@ -719,10 +674,9 @@ export class QueryBuilder {
     }
 
     /**
-     * Get count of matching records
-     * @returns {Promise<Object>}
+     * Get count of matching records.
      */
-    async count() {
+    async count(): Promise<OrmResponse> {
         try {
             const safeTable = validateAndEscapeIdentifier(this.table, 'table name');
             const joinClause = this._buildJoinClause();
@@ -731,56 +685,44 @@ export class QueryBuilder {
             const sql = `SELECT COUNT(*) as count FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
             const [rows] = await pool.execute(sql, bindings);
-            return formatResponse(true, 'Count retrieved', rows[0].count);
+            return formatResponse(true, 'Count retrieved', (rows as RowDataPacket[])[0].count);
         } catch (error) {
-            return formatResponse(false, 'Database operation failed', sanitizeError(error, 'count', { table: this.table }));
+            return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'count', { table: this.table }));
         }
     }
 
     /**
-     * Get sum of a column
-     * @param {string} field
-     * @returns {Promise<Object>}
+     * Get sum of a column.
      */
-    async sum(field) {
+    async sum(field: string): Promise<OrmResponse> {
         return this._aggregate('SUM', field);
     }
 
     /**
-     * Get average of a column
-     * @param {string} field
-     * @returns {Promise<Object>}
+     * Get average of a column.
      */
-    async avg(field) {
+    async avg(field: string): Promise<OrmResponse> {
         return this._aggregate('AVG', field);
     }
 
     /**
-     * Get maximum value of a column
-     * @param {string} field
-     * @returns {Promise<Object>}
+     * Get maximum value of a column.
      */
-    async max(field) {
+    async max(field: string): Promise<OrmResponse> {
         return this._aggregate('MAX', field);
     }
 
     /**
-     * Get minimum value of a column
-     * @param {string} field
-     * @returns {Promise<Object>}
+     * Get minimum value of a column.
      */
-    async min(field) {
+    async min(field: string): Promise<OrmResponse> {
         return this._aggregate('MIN', field);
     }
 
     /**
-     * Execute aggregate function
-     * @param {string} func - Aggregate function name
-     * @param {string} field - Column name
-     * @returns {Promise<Object>}
-     * @private
+     * Execute aggregate function.
      */
-    async _aggregate(func, field) {
+    private async _aggregate(func: string, field: string): Promise<OrmResponse> {
         try {
             const safeTable = validateAndEscapeIdentifier(this.table, 'table name');
             const safeField = validateAndEscapeIdentifier(field, 'column name');
@@ -795,20 +737,19 @@ export class QueryBuilder {
             // float precision loss. Coerce numeric-looking results to Number so
             // callers get numbers; leave non-numeric results (e.g. MAX of a date
             // or text column) and null untouched.
-            const raw = rows[0].result;
+            const raw = (rows as RowDataPacket[])[0].result;
             const value = raw === null || Number.isNaN(Number(raw)) ? raw : Number(raw);
 
             return formatResponse(true, `${func} retrieved`, value);
         } catch (error) {
-            return formatResponse(false, 'Database operation failed', sanitizeError(error, func.toLowerCase(), { table: this.table }));
+            return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, func.toLowerCase(), { table: this.table }));
         }
     }
 
     /**
-     * Create a fresh query builder instance
-     * @returns {QueryBuilder}
+     * Create a fresh query builder instance.
      */
-    clone() {
+    clone(): QueryBuilder {
         return new QueryBuilder(this.table, this.struct);
     }
 }
