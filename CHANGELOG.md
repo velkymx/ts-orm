@@ -12,6 +12,7 @@ All notable changes to VibeORM. Format loosely follows Keep a Changelog.
 - Configurable connection port: all pools and test connections honor `DB_PORT` (falls back to 3306).
 
 ### Changed
+- **M3** Migrated `src/introspect.js` → `introspect.ts` (typed `SHOW COLUMNS` rows, returns `Field[]`). `bin/cli.js` now imports the built `dist/introspect.js`. Behavior unchanged.
 - **M2** Migrated `src/validator.js` → `validator.ts`; exports shared `Field`/`FieldType`/`ValidateOptions` types. Behavior unchanged.
 - **M1** Migrated `src/security.js` → `security.ts` (typed, strict). First file of the incremental TypeScript migration; behavior unchanged.
 - **M0** Build pipeline: `npm run build` compiles `src` → `dist` (JS + `.d.ts`) via `tsconfig.build.json`; `package.json` `main`/`types`/`exports`/`files` now point at `dist`; `prepublishOnly` runs the build; `dist/` is gitignored. Tests continue to run against `src` via Vitest. Enables safe per-file TS migration without breaking runtime resolution.

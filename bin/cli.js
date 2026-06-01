@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-import { generateStructFromTable } from '../src/introspect.js';
+// Built output: src is TypeScript, node runs the compiled dist. Run `npm run
+// build` before using the CLI from a source checkout.
+import { generateStructFromTable } from '../dist/introspect.js';
 import fs from 'fs';
 
 const [,, command, tableName] = process.argv;

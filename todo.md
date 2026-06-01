@@ -12,7 +12,6 @@ Decisions locked:
 
 ## P2 — TypeScript migration (incremental, one file per commit)
 
-- [ ] M3 `src/introspect.js` -> `.ts`.
 - [ ] M4 `src/QueryBuilder.js` -> `.ts`.
 - [ ] M5 `src/orm.js` -> `.ts`.
 - [ ] M6 `src/model.js` -> `.ts`.

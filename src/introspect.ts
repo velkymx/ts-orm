@@ -1,9 +1,11 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { validateAndEscapeIdentifier } from './security.js';
+import type { Field, FieldType } from './validator.js';
 dotenv.config();
 
-const typeMap = {
+// Maps MySQL base column types to the ORM's field types.
+const typeMap: Record<string, FieldType> = {
   int: 'number',
   bigint: 'number',
   tinyint: 'boolean',
@@ -17,11 +19,20 @@ const typeMap = {
   json: 'string'
 };
 
-export async function generateStructFromTable(table) {
+// Shape of a `SHOW COLUMNS` result row.
+interface ColumnRow {
+  Field: string;
+  Type: string;
+  Null: string;
+  Key: string;
+  Default: string | null;
+  Extra: string;
+}
+
+export async function generateStructFromTable(table: string): Promise<Field[]> {
   const pool = mysql.createPool({
     host: process.env.DB_HOST,
     // Honor a configurable port; falls back to MySQL's default 3306 when unset.
-    // Required so the suite can target an ephemeral mysqld on a random port.
     port: Number(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
@@ -30,9 +41,10 @@ export async function generateStructFromTable(table) {
 
   // Validate and escape table name
   const safeTable = validateAndEscapeIdentifier(table, 'table name');
-  const [columns] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
+  const [rows] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
+  const columns = rows as ColumnRow[];
 
-  const struct = columns.map(col => {
+  const struct = columns.map((col): Field => {
     const rawType = col.Type.toLowerCase();
     const lengthMatch = rawType.match(/\((.*?)\)/);
     const baseType = rawType.split('(')[0];
@@ -41,14 +53,14 @@ export async function generateStructFromTable(table) {
 
     const isUuid =
       (baseType === 'char' || baseType === 'varchar') &&
-      parseInt(lengthMatch?.[1]) === 36 &&
+      parseInt(lengthMatch?.[1] ?? '') === 36 &&
       col.Field.toLowerCase().includes('id');
 
-    const type = isUuid
+    const type: FieldType = isUuid
       ? 'uuid'
       : typeMap[baseType] || 'string';
 
-    let length = null;
+    let length: number | null = null;
     if (isEnum) {
       length = null;
     } else if (type === 'date') {
@@ -56,7 +68,7 @@ export async function generateStructFromTable(table) {
     } else if (type === 'datetime') {
       length = 19; // YYYY-MM-DD HH:MM:SS
     } else {
-      length = parseInt(lengthMatch?.[1]) || null;
+      length = parseInt(lengthMatch?.[1] ?? '') || null;
     }
 
     return {
@@ -71,12 +83,13 @@ export async function generateStructFromTable(table) {
           : col.Default === null
             ? (col.Null === 'NO' ? '' : null)
             : col.Default,
-      ...(isEnum && {
-        enum: rawType
-          .match(/\((.*?)\)/)[1]
-          .replace(/'/g, '')
-          .split(',')
-      })
+      ...(isEnum
+        ? {
+            enum: lengthMatch![1]
+              .replace(/'/g, '')
+              .split(',')
+          }
+        : {})
     };
   });
 
