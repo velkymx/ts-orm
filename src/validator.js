@@ -32,9 +32,14 @@ export function validatePayload(struct, payload, options = {}) {
             continue;
         }
 
-        // Number validation
-        if (field.type === 'number' && isNaN(Number(value))) {
-            errors.push(`${field.name} must be a number`);
+        // Number validation. Number('') and Number('   ') coerce to 0, so a blank
+        // string would wrongly pass; reject empty/whitespace strings explicitly
+        // and require a finite numeric value (also rejects NaN/Infinity).
+        if (field.type === 'number') {
+            const blankString = typeof value === 'string' && value.trim() === '';
+            if (blankString || !Number.isFinite(Number(value))) {
+                errors.push(`${field.name} must be a number`);
+            }
         }
 
         // UUID validation

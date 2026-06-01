@@ -7,6 +7,7 @@ import {
   update,
   remove
 } from '../src/orm.js';
+import { validatePayload } from '../src/validator.js';
 import mysql from 'mysql2/promise';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
@@ -185,6 +186,18 @@ describe('Security Tests', () => {
     const res = await create(table, struct, testPayload);
     expect(res.success).toBe(false);
     expect(res.data).toContain('opt_shareclient must be a boolean');
+  });
+
+  test('Rejects empty/whitespace string for a number field', () => {
+    // Number('') and Number(' ') are 0, so a blank string must not slip through
+    // numeric validation.
+    const numStruct = [{ name: 'age', type: 'number', required: true, length: null, default: null }];
+    expect(validatePayload(numStruct, { age: '' })).toContain('age must be a number');
+    expect(validatePayload(numStruct, { age: '   ' })).toContain('age must be a number');
+    expect(validatePayload(numStruct, { age: 'abc' })).toContain('age must be a number');
+    // Genuine numbers (and numeric strings) still pass.
+    expect(validatePayload(numStruct, { age: 42 })).toEqual([]);
+    expect(validatePayload(numStruct, { age: '42' })).toEqual([]);
   });
 
   test('Rejects update with no updatable fields (avoids invalid SET SQL)', async () => {
