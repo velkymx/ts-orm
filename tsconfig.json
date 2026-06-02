@@ -1,21 +1,18 @@
 {
-  // Incremental migration config: JS and TS coexist. allowJs lets the existing
-  // .js files participate; checkJs stays OFF so untyped legacy JS does not break
-  // the typecheck gate. Each file gets strict checking only once renamed to .ts.
+  // Typecheck gate for the TypeScript sources. Migration is complete: `src` is
+  // all `.ts`, so allowJs/checkJs are gone — a stray `.js` in `src` is now a
+  // hard error rather than silently compiled and shipped.
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "allowJs": true,
-    "checkJs": false,
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
-    // noEmit: this config is a typecheck gate only. A separate build config
-    // (added in M7) will emit to dist/.
+    // noEmit: this config is a typecheck gate only. tsconfig.build.json emits dist/.
     "noEmit": true
   },
-  "include": ["src/**/*", "bin/**/*", "tests/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
