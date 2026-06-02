@@ -46,6 +46,25 @@ export function buildPoolConfig(): PoolOptions {
 export const pool = mysql.createPool(buildPoolConfig());
 
 /**
+ * Health check: acquire a pooled connection and ping it. Returns true when the
+ * database is reachable, false on any error (closed pool, network, auth). Useful
+ * for readiness/liveness probes.
+ */
+export async function ping(): Promise<boolean> {
+    try {
+        const conn = await pool.getConnection();
+        try {
+            await conn.ping();
+            return true;
+        } finally {
+            conn.release();
+        }
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Close the shared pool for graceful shutdown (e.g. on SIGTERM/SIGINT). Without
  * this the pool's open connections keep the event loop alive and the process
  * hangs on exit.

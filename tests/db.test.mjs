@@ -1,4 +1,4 @@
-import { buildPoolConfig } from '../src/db.js';
+import { buildPoolConfig, ping } from '../src/db.js';
 
 describe('buildPoolConfig — managed MySQL / TLS', () => {
   let savedSsl;
@@ -38,5 +38,9 @@ describe('buildPoolConfig — managed MySQL / TLS', () => {
   test('DB_SSL=no-verify allows self-signed certs', () => {
     process.env.DB_SSL = 'no-verify';
     expect(buildPoolConfig().ssl).toEqual({ rejectUnauthorized: false });
+  });
+
+  test('ping() returns true when the database is reachable', async () => {
+    expect(await ping()).toBe(true);
   });
 });

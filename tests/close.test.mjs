@@ -1,4 +1,4 @@
-import { pool, close } from '../src/db.js';
+import { pool, close, ping } from '../src/db.js';
 
 // Isolated in its own file: close() ends the shared pool, so this must be the
 // only test using that pool. Other test files run in separate workers with their
@@ -9,5 +9,7 @@ describe('close (graceful shutdown)', () => {
     await pool.query('SELECT 1');
     await close();
     await expect(pool.query('SELECT 1')).rejects.toThrow();
+    // Health check reports unreachable once the pool is closed.
+    expect(await ping()).toBe(false);
   });
 });
