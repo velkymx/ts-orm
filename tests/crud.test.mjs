@@ -110,6 +110,19 @@ async function dropTestTable() {
   await conn.end();
 }
 
+// Shared base for Security validation tests. Declared before its describe block
+// (was previously hoisted only by test() deferral — a readability trap).
+const basePayload = {
+  id: randomUUID(),
+  name: "Test Record",
+  json: JSON.stringify({ key: "value" }),
+  related_forms: "form1,form2",
+  icon: "test-icon",
+  date_created: new Date().toISOString().slice(0, 19).replace('T', ' '),
+  commission_type: "percent",
+  opt_shareclient: true
+};
+
 describe('Security Tests', () => {
   test('Rejects SQL injection in table name', async () => {
     const maliciousTable = "users; DROP TABLE users--";
@@ -232,17 +245,6 @@ describe('Security Tests', () => {
     expect(validatePayload(enumStruct, { kind: null })).toEqual([]);
   });
 });
-
-const basePayload = {
-  id: randomUUID(),
-  name: "Test Record",
-  json: JSON.stringify({ key: "value" }),
-  related_forms: "form1,form2",
-  icon: "test-icon",
-  date_created: new Date().toISOString().slice(0, 19).replace('T', ' '),
-  commission_type: "percent",
-  opt_shareclient: true
-};
 
 describe('ts-orm CRUD operations', () => {
   const testId = randomUUID();
