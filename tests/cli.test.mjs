@@ -61,4 +61,17 @@ describe('CLI (vibeorm struct)', () => {
       expect(e.stdout).toContain('Usage: vibeorm struct <tableName>');
     }
   }, 30000);
+
+  test('exits non-zero and writes nothing for a nonexistent table', async () => {
+    const out = './no_such_tbl_xyz.json';
+    if (fs.existsSync(out)) fs.unlinkSync(out);
+    try {
+      await run('node', ['dist/cli.js', 'struct', 'no_such_tbl_xyz'], { env: process.env, timeout: 20000 });
+      throw new Error('CLI should have failed');
+    } catch (e) {
+      // generateStructFromTable throws (sanitized) -> unhandled rejection -> exit 1.
+      expect(e.code).not.toBe(0);
+      expect(fs.existsSync(out)).toBe(false);
+    }
+  }, 30000);
 });
