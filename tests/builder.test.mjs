@@ -191,8 +191,18 @@ describe('QueryBuilder - JOIN builders', () => {
     expect(res.data.length).toBe(5);
   });
 
-  test('outerJoin aliases rightJoin', async () => {
+  test('outerJoin aliases rightJoin (3-arg shorthand)', async () => {
     const res = await qb(ordersTable).outerJoin(usersTable, `${ordersTable}.user_id`, `${usersTable}.id`).get();
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBe(5);
+  });
+
+  test('outerJoin 4-arg form with explicit operator works (A2 regression)', async () => {
+    // The A2 bug was the 4-arg form forwarding a 4th arg that made rightJoin read
+    // the second column as the operator. Pin the 4-arg path explicitly.
+    const res = await qb(ordersTable)
+      .outerJoin(usersTable, `${ordersTable}.user_id`, '=', `${usersTable}.id`)
+      .get();
     expect(res.success).toBe(true);
     expect(res.data.length).toBe(5);
   });
