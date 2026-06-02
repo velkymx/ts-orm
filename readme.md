@@ -401,6 +401,8 @@ process.on('SIGTERM', async () => {
 
 VibeORM speaks the MySQL wire protocol, so **MySQL**, **MariaDB**, and **RDS / Aurora-MySQL** all work via connection config alone (`DB_*` env, optional `DB_SSL`). CI runs the full suite against both MySQL 8 and MariaDB 11. PostgreSQL and SQLite are not supported.
 
+> **MariaDB note:** MariaDB implements `JSON` as an alias for `LONGTEXT`, so `SHOW COLUMNS` reports `longtext` — introspect maps it to `string`, and json casts won't auto-apply. To get json casting on MariaDB, set `type: 'json'` manually in the struct for those columns.
+
 ---
 
 ## Testing
