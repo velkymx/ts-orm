@@ -199,13 +199,13 @@ describe('QueryBuilder - JOIN builders', () => {
   test('innerJoin rejects an injected join table (escaping enforced)', async () => {
     const res = await qb(ordersTable).innerJoin('bad; DROP TABLE b_users--', `${ordersTable}.user_id`, `${usersTable}.id`).get();
     expect(res.success).toBe(false);
-    expect(res.data).toContain('Invalid');
+    expect(res.data).toMatch(/^Invalid\b.*illegal characters/);
   });
 
   test('leftJoin rejects an injected qualified column', async () => {
     const res = await qb(usersTable).leftJoin(ordersTable, `${usersTable}.id`, 'b_orders.user_id; DROP--').get();
     expect(res.success).toBe(false);
-    expect(res.data).toContain('Invalid');
+    expect(res.data).toMatch(/^Invalid\b.*illegal characters/);
   });
 });
 

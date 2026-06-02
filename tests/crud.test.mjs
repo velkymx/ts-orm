@@ -116,21 +116,21 @@ describe('Security Tests', () => {
     const res = await read(maliciousTable, {});
     expect(res.success).toBe(false);
     expect(res.message).toBe('Database operation failed');
-    expect(res.data).toContain('Invalid');
+    expect(res.data).toMatch(/^Invalid\b.*illegal characters/);
   });
 
   test('Rejects SQL injection in ORDER BY', async () => {
     const res = await read(table, {}, { orderBy: "id; DROP TABLE test--" });
     expect(res.success).toBe(false);
     expect(res.message).toBe('Database operation failed');
-    expect(res.data).toContain('Invalid');
+    expect(res.data).toMatch(/^Invalid\b.*illegal characters/);
   });
 
   test('Rejects SQL injection in WHERE column names', async () => {
     const res = await read(table, { "id' OR '1'='1": 'test' });
     expect(res.success).toBe(false);
     expect(res.message).toBe('Database operation failed');
-    expect(res.data).toContain('Invalid');
+    expect(res.data).toMatch(/^Invalid\b.*illegal characters/);
   });
 
   test('Rejects SQL injection in JOIN table name', async () => {
@@ -139,7 +139,7 @@ describe('Security Tests', () => {
     ]);
     expect(res.success).toBe(false);
     expect(res.message).toBe('Database operation failed');
-    expect(res.data).toContain('Invalid');
+    expect(res.data).toMatch(/^Invalid\b.*illegal characters/);
   });
 
   test('Validates UUID format', async () => {
