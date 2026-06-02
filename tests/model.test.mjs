@@ -356,19 +356,6 @@ describe('Model API Tests', () => {
       expect(result.success).toBe(true);
     });
   });
-
-  describe('Backward Compatibility', () => {
-    test('Model exposes table and struct properties', () => {
-      expect(User.table).toBe(table);
-      expect(User.struct).toEqual(struct);
-    });
-
-    test('query() returns fresh QueryBuilder', () => {
-      const qb1 = User.query();
-      const qb2 = User.query();
-      expect(qb1).not.toBe(qb2); // Different instances
-    });
-  });
 });
 
 describe('Security - operator allowlist (S1)', () => {

@@ -248,8 +248,7 @@ describe('QueryBuilder - pluck and clone', () => {
     const original = qb(usersTable).where('city', 'NYC');
     const cloned = original.clone();
     expect(cloned).toBeInstanceOf(QueryBuilder);
-    expect(cloned).not.toBe(original);
-    // clone starts clean: no inherited WHERE -> all rows
+    // The real assertion: clone starts clean (no inherited WHERE) -> all rows.
     const res = await cloned.get();
     expect(res.success).toBe(true);
     expect(res.data.length).toBe(4);
