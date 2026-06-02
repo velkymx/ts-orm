@@ -291,6 +291,42 @@ describe('introspect.generateStructFromTable', () => {
     await expect(generateStructFromTable('definitely_not_a_table_xyz')).rejects.toThrow('Table not found');
   });
 
+  test('maps MySQL column types to field types', async () => {
+    const c = await getConnection();
+    await c.execute('DROP TABLE IF EXISTS b_types');
+    await c.execute(`CREATE TABLE b_types (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      big BIGINT,
+      amount DECIMAL(10,2),
+      flag TINYINT(1),
+      payload JSON,
+      code VARCHAR(36),
+      ref_id VARCHAR(36),
+      d DATE,
+      dt DATETIME,
+      title VARCHAR(64)
+    )`);
+    await c.end();
+
+    const s = await generateStructFromTable('b_types');
+    const type = (n) => s.find(f => f.name === n)?.type;
+    expect(type('id')).toBe('number');
+    expect(s.find(f => f.name === 'id')?.default).toBe('auto_increment');
+    expect(type('big')).toBe('number');     // BIGINT
+    expect(type('amount')).toBe('number');  // DECIMAL
+    expect(type('flag')).toBe('boolean');   // TINYINT(1)
+    expect(type('payload')).toBe('string'); // JSON
+    expect(type('code')).toBe('string');    // VARCHAR(36) without 'id' -> not UUID
+    expect(type('ref_id')).toBe('uuid');    // VARCHAR(36) + 'id' in name
+    expect(type('d')).toBe('date');         // DATE
+    expect(type('dt')).toBe('datetime');    // DATETIME
+    expect(type('title')).toBe('string');
+
+    const c2 = await getConnection();
+    await c2.execute('DROP TABLE IF EXISTS b_types');
+    await c2.end();
+  });
+
   test('parses enum values cleanly (no stray whitespace)', async () => {
     const c = await getConnection();
     await c.execute('DROP TABLE IF EXISTS b_enum');

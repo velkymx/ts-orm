@@ -6,6 +6,12 @@ import type { Field, FieldType } from './validator.js';
 const typeMap: Record<string, FieldType> = {
   int: 'number',
   bigint: 'number',
+  smallint: 'number',
+  mediumint: 'number',
+  decimal: 'number',
+  numeric: 'number',
+  float: 'number',
+  double: 'number',
   tinyint: 'boolean',
   varchar: 'string',
   char: 'string',
