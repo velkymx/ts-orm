@@ -24,3 +24,15 @@ export const pool = mysql.createPool({
 export function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
     return { success, message, data };
 }
+
+// Reduce a multi-row result envelope to a single-record one: the first row, or a
+// not-found / failed envelope. Shared by orm.readOne and QueryBuilder.first().
+export function firstRow(result: OrmResponse): OrmResponse {
+    if (!result.success || !Array.isArray(result.data)) {
+        return formatResponse(false, 'Query failed');
+    }
+    if (result.data.length === 0) {
+        return formatResponse(false, 'Record not found');
+    }
+    return formatResponse(true, 'Record found', result.data[0]);
+}

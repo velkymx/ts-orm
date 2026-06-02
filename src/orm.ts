@@ -2,7 +2,7 @@ import type { ResultSetHeader, ExecuteValues } from 'mysql2';
 import { validatePayload } from './validator.js';
 import type { Field } from './validator.js';
 import type { OrmResponse } from './QueryBuilder.js';
-import { pool, formatResponse } from './db.js';
+import { pool, formatResponse, firstRow } from './db.js';
 import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError } from './security.js';
 
 // Query shaping options shared by read/readWith.
@@ -91,17 +91,7 @@ export async function read(table: string, conditions: Record<string, unknown> = 
 }
 
 export async function readOne(table: string, conditions: Record<string, unknown> = {}): Promise<OrmResponse> {
-    const result = await read(table, conditions);
-
-    if (!result.success || !Array.isArray(result.data)) {
-      return formatResponse(false, 'Query failed');
-    }
-
-    if (result.data.length === 0) {
-      return formatResponse(false, 'Record not found');
-    }
-
-    return formatResponse(true, 'Record found', result.data[0]);
+    return firstRow(await read(table, conditions));
   }
 
   export async function findOrFail(table: string, key: string, value: unknown): Promise<OrmResponse> {

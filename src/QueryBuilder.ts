@@ -1,5 +1,5 @@
 import type { RowDataPacket, ExecuteValues } from 'mysql2';
-import { pool, formatResponse } from './db.js';
+import { pool, formatResponse, firstRow } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field } from './validator.js';
 
@@ -653,17 +653,7 @@ export class QueryBuilder {
      */
     async first(): Promise<OrmResponse> {
         this._limit = 1;
-        const result = await this.get();
-
-        if (!result.success || !Array.isArray(result.data)) {
-            return formatResponse(false, 'Query failed');
-        }
-
-        if (result.data.length === 0) {
-            return formatResponse(false, 'Record not found');
-        }
-
-        return formatResponse(true, 'Record found', result.data[0]);
+        return firstRow(await this.get());
     }
 
     /**
