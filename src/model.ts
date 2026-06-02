@@ -1,6 +1,7 @@
 import { create, read, readOne, readWith, findOrFail, update, remove } from './orm.js';
 import type { JoinSpec, ReadOptions } from './orm.js';
 import { QueryBuilder } from './QueryBuilder.js';
+import { castReadRow, castReadRows } from './casts.js';
 import type { Field } from './validator.js';
 
 /**
@@ -32,7 +33,9 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * Find a record by primary key.
          */
         async find(id: unknown) {
-            return readOne<T>(table, { [primaryKey]: id });
+            const r = await readOne<T>(table, { [primaryKey]: id });
+            if (r.success && r.data) castReadRow(r.data as Record<string, unknown>, struct);
+            return r;
         },
 
         /**
@@ -40,7 +43,9 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * envelope (success:false with 'Record not found' when absent).
          */
         async findOrFail(id: unknown) {
-            return findOrFail<T>(table, primaryKey, id);
+            const r = await findOrFail<T>(table, primaryKey, id);
+            if (r.success && r.data) castReadRow(r.data as Record<string, unknown>, struct);
+            return r;
         },
 
         /**
@@ -93,14 +98,18 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * Get all records.
          */
         async all(conditions: Record<string, unknown> = {}) {
-            return read<T>(table, conditions);
+            const r = await read<T>(table, conditions);
+            if (r.success) castReadRows(r.data, struct);
+            return r;
         },
 
         /**
          * Get first record matching conditions.
          */
         async first(conditions: Record<string, unknown> = {}) {
-            return readOne<T>(table, conditions);
+            const r = await readOne<T>(table, conditions);
+            if (r.success && r.data) castReadRow(r.data as Record<string, unknown>, struct);
+            return r;
         },
 
         /**

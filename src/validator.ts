@@ -2,7 +2,7 @@ import { isValidUUID, isValidDatetime, isValidDate, isValidBoolean } from './sec
 
 // Supported column types. Introspection and hand-written structs both produce
 // these; anything unrecognized is treated as a plain string elsewhere.
-export type FieldType = 'number' | 'string' | 'uuid' | 'datetime' | 'date' | 'boolean' | 'enum';
+export type FieldType = 'number' | 'string' | 'uuid' | 'datetime' | 'date' | 'boolean' | 'enum' | 'json';
 
 // A single column definition within a table struct. Shared across the ORM.
 export interface Field {

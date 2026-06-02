@@ -20,7 +20,7 @@ const typeMap: Record<string, FieldType> = {
   datetime: 'datetime',
   timestamp: 'datetime',
   enum: 'enum',
-  json: 'string'
+  json: 'json'
 };
 
 // Shape of a `SHOW COLUMNS` result row.

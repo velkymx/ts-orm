@@ -1,6 +1,7 @@
 import type { RowDataPacket } from 'mysql2';
 import { runQuery, formatResponse, firstRow, limitOffsetClause } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
+import { castReadRows } from './casts.js';
 import type { Field } from './validator.js';
 
 // Standard envelope returned by every data operation.
@@ -638,9 +639,10 @@ export class QueryBuilder<T = Record<string, unknown>> {
             const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
             const [rows] = await runQuery(sql, bindings);
+            // Cast DB values to JS (boolean/json) using the struct, then return.
             // Rows are typed as T[] by the caller's generic; the envelope is
             // loosely typed on the failure branch (success path is sound).
-            return formatResponse(true, 'Data retrieved', rows) as OrmResponse<T[]>;
+            return formatResponse(true, 'Data retrieved', castReadRows(rows, this.struct)) as OrmResponse<T[]>;
         } catch (error) {
             return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'get', { table: this.table })) as OrmResponse<T[]>;
         }

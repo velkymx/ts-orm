@@ -1,5 +1,6 @@
 import type { ResultSetHeader } from 'mysql2';
 import { validatePayload } from './validator.js';
+import { castWriteValue } from './casts.js';
 import type { Field } from './validator.js';
 import type { OrmResponse } from './QueryBuilder.js';
 import { runQuery, formatResponse, firstRow, limitOffsetClause } from './db.js';
@@ -39,7 +40,7 @@ export async function create(table: string, struct: Field[], payload: Record<str
             return !(typeof value === 'string' && SERVER_DEFAULTS.has(value));
         });
         const columns = insertFields.map(f => f.name);
-        const values = insertFields.map(f => payload[f.name] ?? f.default);
+        const values = insertFields.map(f => castWriteValue(payload[f.name] ?? f.default, f));
 
         // Validate and escape column names
         const safeColumns = columns.map(col => validateAndEscapeIdentifier(col, 'column name'));
@@ -188,7 +189,7 @@ export async function update(table: string, struct: Field[], payload: Record<str
         // are derived from the same filtered field list (avoids a second filter).
         const setFields = struct.filter(f => payload[f.name] !== undefined && f.name !== idKey);
         const updates = setFields.map(f => `${validateAndEscapeIdentifier(f.name, 'column name')} = ?`);
-        const values = setFields.map(f => payload[f.name]);
+        const values = setFields.map(f => castWriteValue(payload[f.name], f));
 
         // Nothing to SET (only the id key, or no matching columns) would produce
         // `UPDATE ... SET  WHERE id = ?`, a SQL parse error. Fail cleanly instead.
