@@ -42,6 +42,25 @@ Full-project review. Severity-tagged; not yet scheduled into the P-tiers below. 
 
 ---
 
+## Code Review — TypeScript 6+ (2026-06-01)
+
+Type-safety / TS6-practices pass. Bug/security/perf findings R1–R12 (above) still stand. Positive: `src` is `any`-free (A3) and uses `import type` + `.js` ESM specifiers correctly.
+
+### MEDIUM
+- [ ] T1 **`tsconfig` carries migration leftovers.** `tsconfig.json:9-10` `allowJs:true`/`checkJs:false` are obsolete — all `src` is `.ts`, no `.js` remains; keeping `allowJs` lets a stray `.js` silently compile and ship. Set `allowJs:false`, drop `checkJs`. Also `include` lists `bin/**/*` (`tsconfig.json:19`) but `bin/` was removed (CLI moved to `src/cli.ts`) — stale.
+- [ ] T2 **`noUncheckedIndexedAccess` is off.** Index/array access is typed as always-present, which is exactly what masks the `!`/`as` smells and the edge bugs already filed: `introspect.ts:77` `lengthMatch![1]`, `orm.ts:144-145` `leftCol.split('.')` destructure, `QueryBuilder` `where.fields![i]`, `rows[0].count`. Enabling it is the highest-value TS6 hardening for the "strict type safety" mandate — it surfaces R3 (empty IN) / R8 (split edges) at compile time. (Will require fixing the spots it flags.)
+- [ ] T3 **Generics not threaded — public API returns `data: unknown`.** `OrmResponse<T>` exists but `model()`/`find`/`get`/`read`/`first` all resolve `unknown`, so every consumer casts each row. For a "strict type safety" ORM, `model<User>()` should flow `OrmResponse<User[]>` / `OrmResponse<User>`. Currently zero row-level type safety at call sites. (Behavioral/API-surface change — flag only, needs sign-off.)
+
+### LOW
+- [ ] T4 `verbatimModuleSyntax` not set — recommended for ESM/TS to lock consistent `import type` + predictable emit (code already follows it; flag enforces it).
+- [ ] T5 Recommended strict-family flags off: `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `exactOptionalPropertyTypes`. Cheap dead-code/correctness signal.
+- [ ] T6 `skipLibCheck:true` (`tsconfig.json:14`) — pragmatic, but hides dependency `.d.ts` errors for a package that publishes types; periodic check advisable.
+- [ ] T7 Build emits `.d.ts` but no `declarationMap` — consumers can't jump to source types. Add `declarationMap:true` in `tsconfig.build.json` for DX.
+- [ ] T8 Tests are `.mjs` → not typechecked. `.ts` tests would give type coverage on the public API and catch T3-style regressions.
+- [ ] T9 Boundary casts `as RowDataPacket[]` / `as ExecuteValues[]` are acceptable but scattered; routing all `pool.execute` through one typed helper (ties to R6) confines them to a single audited spot (consider `satisfies`).
+
+---
+
 ## P0 — Critical / Blocker
 
 - None. No active perf regression, security vuln, or broken core logic. (Operator-injection S1 fixed; identifier escaping covers table/column/order/join paths.)
