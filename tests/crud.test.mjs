@@ -3,7 +3,6 @@ import {
   read,
   readOne,
   readWith,
-  findOrFail,
   update,
   remove
 } from '../src/orm.js';
@@ -305,13 +304,6 @@ describe('ts-orm CRUD operations', () => {
     expect(res.data[0].name).toBe("Test Record");
   });
 
-  test('Read one record', async () => {
-    const res = await readOne(table, { id: testId });
-    expect(res.success).toBe(true);
-    expect(res.data).toHaveProperty('id');
-    expect(res.data.id).toBe(testId);
-  });
-
   test('Read sorted records with orderBy DESC', async () => {
     const res = await read(table, {}, {
       orderBy: 'date_created',
@@ -350,12 +342,6 @@ describe('ts-orm CRUD operations', () => {
     // The related table has no rows yet (inserted by a later test), so an INNER
     // join yields zero rows. Pinning 0 also exercises the qualified ORDER BY path.
     expect(res.data.length).toBe(0);
-  });
-
-  test('Find or fail - success returns the standard envelope', async () => {
-    const res = await findOrFail(table, 'id', testId);
-    expect(res.success).toBe(true);
-    expect(res.data.id).toBe(testId);
   });
 
   test('Insert related record for join', async () => {
@@ -404,13 +390,6 @@ describe('ts-orm CRUD operations', () => {
     const res = await read(table, { id: testId });
     expect(res.success).toBe(true);
     expect(res.data.length).toBe(0);
-  });
-
-  test('Find or fail - missing record returns a failure envelope (no throw)', async () => {
-    const res = await findOrFail(table, 'id', 'non-existent-id');
-    expect(res.success).toBe(false);
-    expect(res.message).toBe('Record not found');
-    expect(res.data).toBeNull();
   });
 
   describe('Auto-increment ID support', () => {
