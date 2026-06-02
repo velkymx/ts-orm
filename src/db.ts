@@ -45,6 +45,15 @@ export function buildPoolConfig(): PoolOptions {
 // prepared once instead of once per pool.
 export const pool = mysql.createPool(buildPoolConfig());
 
+/**
+ * Close the shared pool for graceful shutdown (e.g. on SIGTERM/SIGINT). Without
+ * this the pool's open connections keep the event loop alive and the process
+ * hangs on exit.
+ */
+export async function close(): Promise<void> {
+    await pool.end();
+}
+
 // Holds the active transaction connection for the current async context.
 // Empty outside a transaction.
 const txStore = new AsyncLocalStorage<PoolConnection>();

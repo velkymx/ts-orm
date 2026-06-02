@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { generateStructFromTable } from './introspect.js';
-import { pool } from './db.js';
+import { close } from './db.js';
 import fs from 'fs';
 
 const [, , command, tableName] = process.argv;
@@ -15,7 +15,7 @@ if (command === 'struct' && tableName) {
 
   // Close the shared pool so the process can exit. Its open connections would
   // otherwise keep the event loop alive and the CLI would hang after writing.
-  await pool.end();
+  await close();
 } else {
   console.log('Usage: vibeorm struct <tableName>');
   process.exit(1);

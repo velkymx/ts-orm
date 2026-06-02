@@ -9,6 +9,9 @@ export { QueryBuilder } from './QueryBuilder.js';
 // Transactions: run ops atomically (auto-routes via AsyncLocalStorage).
 export { withTransaction } from './db.js';
 
+// Graceful shutdown: close the shared pool (call on SIGTERM/SIGINT).
+export { close } from './db.js';
+
 // Pluggable logging — inject your own logger (pino/winston) via setLogger().
 export { createConsoleLogger, setLogger, getLogger } from './logger.js';
 
