@@ -323,7 +323,9 @@ describe('introspect.generateStructFromTable', () => {
     expect(type('big')).toBe('number');     // BIGINT
     expect(type('amount')).toBe('number');  // DECIMAL
     expect(type('flag')).toBe('boolean');   // TINYINT(1)
-    expect(type('payload')).toBe('json'); // JSON
+    // MySQL reports JSON columns as `json`; MariaDB stores JSON as LONGTEXT and
+    // reports `longtext` -> `string`. Accept either so the suite passes on both.
+    expect(['json', 'string']).toContain(type('payload'));
     expect(type('code')).toBe('string');    // VARCHAR(36) without 'id' -> not UUID
     expect(type('ref_id')).toBe('uuid');    // VARCHAR(36) + 'id' in name
     expect(type('d')).toBe('date');         // DATE
