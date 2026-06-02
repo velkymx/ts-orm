@@ -280,7 +280,8 @@ describe('ts-orm CRUD operations', () => {
         ...crudPayload,
         id,
         name: `Record ${i}`,
-        date_created: new Date(Date.now() + i * 1000).toISOString().slice(0, 19).replace('T', ' ')
+        // Fixed, distinct timestamps — deterministic ordering (no wall-clock/DST).
+        date_created: `2025-06-01 12:00:0${i}`
       };
       const res = await create(table, struct, payload);
       expect(res.success).toBe(true);
@@ -309,8 +310,9 @@ describe('ts-orm CRUD operations', () => {
     });
   
     expect(res.success).toBe(true);
-    expect(res.data.length).toBeGreaterThanOrEqual(5);
-    expect(res.data[0].name).toMatch(/Record \d/); // Most recent first
+    // Among the fixed-timestamp Record rows, DESC must return 4 → 0 exactly.
+    const records = res.data.filter(r => r.name.startsWith('Record ')).map(r => r.name);
+    expect(records).toEqual(['Record 4', 'Record 3', 'Record 2', 'Record 1', 'Record 0']);
   });
 
   test('Read records with limit and offset', async () => {
