@@ -186,41 +186,59 @@ describe('Model API Tests', () => {
       expect(result.data.every(u => u.status === 'active' && u.age > 20)).toBe(true);
     });
 
-    test('orWhere() - OR condition', async () => {
-      const result = await User
-        .where('status', 'active')
-        .orWhere('status', 'pending')
-        .get();
+    // Expected counts are derived from User.all() (the orm.read path) so they
+    // stay correct regardless of how earlier tests mutate the table — while
+    // still cross-checking the independent QueryBuilder path.
+    test('orWhere() - returns the union, not the intersection', async () => {
+      const all = (await User.all()).data;
+      const expected = all.filter(u => u.status === 'active' || u.status === 'pending').length;
+
+      const result = await User.where('status', 'active').orWhere('status', 'pending').get();
 
       expect(result.success).toBe(true);
-      expect(result.data.every(u => u.status === 'active' || u.status === 'pending')).toBe(true);
+      expect(result.data.length).toBe(expected);
+      // Guards against OR silently degrading to AND/single-clause:
+      expect(result.data.some(u => u.status === 'active')).toBe(true);
+      expect(result.data.some(u => u.status === 'pending')).toBe(true);
     });
 
-    test('whereIn() - IN clause', async () => {
+    test('whereIn() - IN clause returns the full matching set', async () => {
+      const all = (await User.all()).data;
+      const expected = all.filter(u => ['active', 'pending'].includes(u.status)).length;
+
       const result = await User.whereIn('status', ['active', 'pending']).get();
       expect(result.success).toBe(true);
+      expect(result.data.length).toBe(expected);
       expect(result.data.every(u => ['active', 'pending'].includes(u.status))).toBe(true);
     });
 
-    test('whereNotIn() - NOT IN clause', async () => {
-      const result = await User
-        .query()
-        .whereNotIn('status', ['inactive'])
-        .get();
+    test('whereNotIn() - NOT IN clause excludes exactly the listed values', async () => {
+      const all = (await User.all()).data;
+      const expected = all.filter(u => u.status !== 'inactive').length;
 
+      const result = await User.query().whereNotIn('status', ['inactive']).get();
       expect(result.success).toBe(true);
+      expect(result.data.length).toBe(expected);
       expect(result.data.every(u => u.status !== 'inactive')).toBe(true);
     });
 
-    test('whereNull() - IS NULL', async () => {
+    test('whereNull() - IS NULL returns exactly the null rows', async () => {
+      const all = (await User.all()).data;
+      const expected = all.filter(u => u.last_login === null).length;
+
       const result = await User.whereNull('last_login').get();
       expect(result.success).toBe(true);
+      expect(result.data.length).toBe(expected);
       expect(result.data.every(u => u.last_login === null)).toBe(true);
     });
 
-    test('whereNotNull() - IS NOT NULL', async () => {
+    test('whereNotNull() - IS NOT NULL returns exactly the non-null rows', async () => {
+      const all = (await User.all()).data;
+      const expected = all.filter(u => u.age !== null).length;
+
       const result = await User.whereNotNull('age').get();
       expect(result.success).toBe(true);
+      expect(result.data.length).toBe(expected);
       expect(result.data.every(u => u.age !== null)).toBe(true);
     });
   });
@@ -290,27 +308,33 @@ describe('Model API Tests', () => {
   });
 
   describe('Query Builder - Aggregates', () => {
-    test('count() - count all records', async () => {
+    test('count() - matches the actual row count', async () => {
+      const all = (await User.all()).data;
       const result = await User.count();
       expect(result.success).toBe(true);
-      expect(result.data).toBeGreaterThanOrEqual(10);
+      expect(result.data).toBe(all.length); // exact, not >= 10
     });
 
     test('count() - count with conditions', async () => {
+      const all = (await User.all()).data;
+      const expected = all.filter(u => u.status === 'active').length;
       const result = await User.where('status', 'active').count();
       expect(result.success).toBe(true);
       expect(typeof result.data).toBe('number');
+      expect(result.data).toBe(expected);
     });
 
-    test('sum() - sum column values', async () => {
+    test('sum() - returns a number (DECIMAL coerced, B2 contract)', async () => {
       const result = await User.sum('balance');
       expect(result.success).toBe(true);
+      expect(typeof result.data).toBe('number'); // not the mysql2 DECIMAL string
       expect(result.data).toBeGreaterThan(0);
     });
 
-    test('avg() - average column values', async () => {
+    test('avg() - returns a number (B2 contract)', async () => {
       const result = await User.avg('age');
       expect(result.success).toBe(true);
+      expect(typeof result.data).toBe('number');
       expect(result.data).toBeGreaterThan(0);
     });
 
