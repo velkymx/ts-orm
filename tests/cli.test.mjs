@@ -2,8 +2,6 @@ import { execFile, execSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import mysql from 'mysql2/promise';
 import fs from 'node:fs';
-import dotenv from 'dotenv';
-dotenv.config();
 
 const run = promisify(execFile);
 const table = 'cli_probe';

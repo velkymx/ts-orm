@@ -1,8 +1,6 @@
 import { withTransaction } from '../src/db.js';
 import { create, read } from '../src/orm.js';
 import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
-dotenv.config();
 
 const table = 'tx_test';
 const struct = [

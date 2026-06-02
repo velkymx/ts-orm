@@ -5,8 +5,6 @@ import { readWith } from '../src/orm.js';
 import { isValidDate, isValidDatetime, isValidBoolean, isValidUUID } from '../src/security.js';
 import mysql from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
-import dotenv from 'dotenv';
-dotenv.config();
 
 // Dedicated schema so JOIN builders and multi-column WHERE variants can be
 // exercised against real MySQL (the model suite has only one table).

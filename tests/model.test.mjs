@@ -1,8 +1,6 @@
 import { model } from '../src/model.js';
 import mysql from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
-import dotenv from 'dotenv';
-dotenv.config();
 
 const table = 'model_test';
 
