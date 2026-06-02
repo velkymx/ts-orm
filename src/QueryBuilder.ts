@@ -1,5 +1,5 @@
-import type { RowDataPacket, ExecuteValues } from 'mysql2';
-import { executor, formatResponse, firstRow, limitOffsetClause } from './db.js';
+import type { RowDataPacket } from 'mysql2';
+import { runQuery, formatResponse, firstRow, limitOffsetClause } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field } from './validator.js';
 
@@ -494,7 +494,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
 
         const whereParts: string[] = [];
         // unknown[]: values originate from caller payloads. They are cast to
-        // mysql2's ExecuteValues only at the pool.execute boundary.
+        // mysql2's ExecuteValues only inside runQuery (the single execute path).
         const bindings: unknown[] = [];
 
         this._wheres.forEach((where, index) => {
@@ -603,7 +603,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
 
             const sql = `SELECT ${safeField} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
-            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await runQuery(sql, bindings);
 
             // Extract just the values from the result rows
             const values = (rows as RowDataPacket[]).map(row => row[field]);
@@ -631,7 +631,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
 
             const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
-            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await runQuery(sql, bindings);
             // Rows are typed as T[] by the caller's generic; the envelope is
             // loosely typed on the failure branch (success path is sound).
             return formatResponse(true, 'Data retrieved', rows) as OrmResponse<T[]>;
@@ -661,7 +661,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
 
             const sql = `SELECT COUNT(*) as count FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
-            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await runQuery(sql, bindings);
             // COUNT(*) always yields exactly one row; default to 0 to satisfy the
             // type checker if the driver ever returns an empty set.
             return formatResponse(true, 'Count retrieved', (rows as RowDataPacket[])[0]?.count ?? 0);
@@ -710,7 +710,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
 
             const sql = `SELECT ${func}(${safeField}) as result FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
-            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await runQuery(sql, bindings);
 
             // mysql2 returns DECIMAL aggregates (SUM/AVG) as strings to avoid
             // float precision loss. Coerce numeric-looking results to Number so

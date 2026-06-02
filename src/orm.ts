@@ -1,8 +1,8 @@
-import type { ResultSetHeader, ExecuteValues } from 'mysql2';
+import type { ResultSetHeader } from 'mysql2';
 import { validatePayload } from './validator.js';
 import type { Field } from './validator.js';
 import type { OrmResponse } from './QueryBuilder.js';
-import { executor, formatResponse, firstRow, limitOffsetClause } from './db.js';
+import { runQuery, formatResponse, firstRow, limitOffsetClause } from './db.js';
 import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError } from './security.js';
 
 // Query shaping options shared by read/readWith.
@@ -47,7 +47,7 @@ export async function create(table: string, struct: Field[], payload: Record<str
         const placeholders = columns.map(() => '?').join(', ');
         const sql = `INSERT INTO ${safeTable} (${safeColumns.join(', ')}) VALUES (${placeholders})`;
 
-        const [result] = await executor().execute(sql, values as ExecuteValues[]);
+        const [result] = await runQuery(sql, values);
         return formatResponse(true, 'Record created', { id: (result as ResultSetHeader).insertId });
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'create', { table }));
@@ -79,7 +79,7 @@ export async function read<T = Record<string, unknown>>(table: string, condition
 
         const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
-        const [rows] = await executor().execute(sql, keys.map(k => conditions[k]) as ExecuteValues[]);
+        const [rows] = await runQuery(sql, keys.map(k => conditions[k]));
         // Rows typed as T[] by the caller's generic; failure branch is loosely
         // typed (success path is sound).
         return formatResponse(true, 'Data retrieved', rows) as OrmResponse<T[]>;
@@ -163,7 +163,7 @@ export async function readWith<T = Record<string, unknown>>(table: string, condi
 
         const values = whereKeys.map(k => conditions[k]);
 
-        const [rows] = await executor().execute(sql, values as ExecuteValues[]);
+        const [rows] = await runQuery(sql, values);
 
         return formatResponse(true, 'Data retrieved with join', rows) as OrmResponse<T[]>;
     } catch (error) {
@@ -199,7 +199,7 @@ export async function update(table: string, struct: Field[], payload: Record<str
         values.push(payload[idKey]);
         const sql = `UPDATE ${safeTable} SET ${updates.join(', ')} WHERE ${safeIdKey} = ?`;
 
-        const [result] = await executor().execute(sql, values as ExecuteValues[]);
+        const [result] = await runQuery(sql, values);
         return formatResponse(true, 'Record updated', result);
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'update', { table }));
@@ -215,7 +215,7 @@ export async function remove(table: string, idKey: string, idVal: unknown): Prom
         const sql = `DELETE FROM ${safeTable} WHERE ${safeIdKey} = ?`;
 
         const values: unknown[] = [idVal];
-        const [result] = await executor().execute(sql, values as ExecuteValues[]);
+        const [result] = await runQuery(sql, values);
         return formatResponse(true, 'Record deleted', result);
     } catch (error) {
         return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'remove', { table }));

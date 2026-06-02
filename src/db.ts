@@ -1,8 +1,9 @@
 import mysql from 'mysql2/promise';
-import type { PoolOptions } from 'mysql2';
+import type { PoolOptions, ExecuteValues, QueryResult, FieldPacket } from 'mysql2';
 import type { Pool, PoolConnection } from 'mysql2/promise';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import dotenv from 'dotenv';
+import { getLogger } from './logger.js';
 import type { OrmResponse } from './QueryBuilder.js';
 
 // Load environment once for the whole package. quiet:true suppresses dotenv 17's
@@ -88,6 +89,29 @@ const txStore = new AsyncLocalStorage<PoolConnection>();
 // expose the same execute() signature, so callers need no change.
 export function executor(): Pool | PoolConnection {
     return txStore.getStore() ?? pool;
+}
+
+/**
+ * Single execution path for every query. Logs the SQL at debug level, times it,
+ * and warns when it exceeds DB_SLOW_QUERY_MS (disabled when unset/0). Only the
+ * SQL text is logged — never the bound parameters (PII-safe). This is also the
+ * one place the caller-supplied params are cast to mysql2's ExecuteValues.
+ */
+export async function runQuery(sql: string, params: unknown[] = []): Promise<[QueryResult, FieldPacket[]]> {
+    const log = getLogger();
+    log.debug('query', { sql });
+
+    const start = performance.now();
+    const [rows, fields] = await executor().execute(sql, params as ExecuteValues[]);
+    const durationMs = performance.now() - start;
+
+    // Read the threshold per call so it can be tuned at runtime; 0/unset disables.
+    const slowMs = Number(process.env.DB_SLOW_QUERY_MS) || 0;
+    if (slowMs > 0 && durationMs >= slowMs) {
+        log.warn('slow query', { sql, durationMs: Math.round(durationMs) });
+    }
+
+    return [rows, fields];
 }
 
 /**
