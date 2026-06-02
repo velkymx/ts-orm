@@ -300,11 +300,77 @@ Errors are sanitized before reaching the logger: only error metadata and context
 
 ---
 
-## Migrating from v1.4 to v1.5
+## Migrating from v1.5 to v1.6
 
-1. **Identifiers**: table/column names must match `[a-zA-Z0-9_]`. Rename anything with hyphens, spaces, or punctuation. Identifiers that don't match throw at the first query.
-2. **Error parsing**: `result.data` is now a stable string (`Record already exists`, etc.) or an array of validation messages. Stop regex-matching the raw driver text.
-3. **Validation**: `number` rejects blank strings, `NaN`, and `Infinity`; `uuid` enforces v4; `datetime` enforces `YYYY-MM-DD HH:MM:SS`; `date` enforces `YYYY-MM-DD`; `boolean` requires `true`/`false`/`0`/`1`.
+v1.6.0 is additive. Nothing in 1.5.0 was removed or behaviorally changed. The upgrade is two new opt-in surfaces plus a small set of new exports.
+
+### 1. Adopt the Model API for new code (optional)
+
+`model()` and `QueryBuilder` are now exported alongside the function-based API. They share the same envelope, the same security, and the same struct. Pick one per table — they do not need to be consistent across a project.
+
+```js
+// Before (still works)
+import { create, read, update } from '@velkymx/vibeorm';
+
+// After — same envelope, chainable
+import { model } from '@velkymx/vibeorm';
+const User = model('users', userStruct);
+```
+
+`User.find`, `User.create`, `User.update`, `User.delete` delegate to the function-based API, so validation and identifier checks are identical.
+
+### 2. Switch joins from manual SQL to `readWith` (optional)
+
+```js
+// Before — manual SQL string with hand-escaped identifiers
+const sql = `SELECT u.*, p.id AS post_id
+             FROM \`users\` u
+             LEFT JOIN \`posts\` p ON p.user_id = u.id
+             WHERE u.status = ?`;
+
+// After — typed join spec
+import { readWith } from '@velkymx/vibeorm';
+
+const rows = await readWith(
+  'users',
+  { status: 'active' },
+  [{ type: 'left', table: 'posts', on: ['users.id', 'posts.user_id'] }],
+  { orderBy: 'users.created_at', direction: 'DESC' }
+);
+```
+
+### 3. Use `readOne` / `findOrFail` instead of slicing `read()` results
+
+`read()` still returns the full array. For a single row:
+
+```js
+import { readOne, findOrFail } from '@velkymx/vibeorm';
+
+const user = await readOne('users', { email: 'alice@example.com' });
+// { success: false, message: 'Record not found', data: null } on miss
+
+const u = await findOrFail('users', 'id', '123e4567-e89b-12d3-a456-426614174000');
+```
+
+`findOrFail` returns the same envelope as every other operation — it does not throw on a miss. If any caller in your codebase was relying on a thrown error, switch them to checking `result.success`.
+
+### 4. New exports worth knowing
+
+| Export                              | Notes                                                                 |
+|-------------------------------------|-----------------------------------------------------------------------|
+| `model(table, struct, opts?)`       | Returns a Model with `find` / `findOrFail` / `create` / `update` / `delete` / `where` / etc. |
+| `QueryBuilder`                      | Class form of the chainable builder; identical to the one `model().where()` returns |
+| `setLogger` / `getLogger` / `createConsoleLogger` | Pluggable logging — see the section above               |
+| `Field`, `FieldType`, `ValidateOptions`, `OrmResponse`, `Logger`, `LogLevel` | Shared TypeScript types                  |
+| `validatePayload`                   | Reusable validator — useful in Express middleware / CLI tooling       |
+
+### 5. Logger prefix changed
+
+Server-side errors logged through the ORM are now prefixed `[vibeorm]` (previously `[ts-orm]`). If you grep logs for the old prefix, update the pattern.
+
+### 6. No changes to identifiers, validation, or error shape
+
+The v1.5 security contract still holds: identifier allowlist, operator allowlist, sanitized error messages, partial-update semantics. Nothing in your 1.5 structs, payloads, or error-handling code needs to change.
 
 The full changelog lives in [CHANGELOG.md](./CHANGELOG.md).
 
