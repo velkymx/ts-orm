@@ -1,6 +1,7 @@
 import { QueryBuilder } from '../src/QueryBuilder.js';
 import { model } from '../src/model.js';
 import { generateStructFromTable } from '../src/introspect.js';
+import { readWith } from '../src/orm.js';
 import { isValidDate, isValidDatetime, isValidBoolean, isValidUUID } from '../src/security.js';
 import mysql from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
@@ -341,6 +342,15 @@ describe('introspect.generateStructFromTable', () => {
     const c2 = await getConnection();
     await c2.execute('DROP TABLE IF EXISTS b_enum');
     await c2.end();
+  });
+});
+
+describe('orm.readWith — options', () => {
+  test('an invalid direction falls back to ASC', async () => {
+    const res = await readWith(usersTable, {}, [], { orderBy: 'age', direction: 'invalid' });
+    expect(res.success).toBe(true);
+    const ages = res.data.map(r => r.age);
+    expect(ages).toEqual([...ages].sort((a, b) => a - b)); // ascending
   });
 });
 
