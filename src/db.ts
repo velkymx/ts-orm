@@ -76,7 +76,12 @@ export async function ping(): Promise<boolean> {
  * this the pool's open connections keep the event loop alive and the process
  * hangs on exit.
  */
+let poolClosed = false;
 export async function close(): Promise<void> {
+    // Idempotent: a second close() would call pool.end() on an ended pool, which
+    // throws. Safe to call from multiple shutdown handlers.
+    if (poolClosed) return;
+    poolClosed = true;
     await pool.end();
 }
 

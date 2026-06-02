@@ -11,5 +11,7 @@ describe('close (graceful shutdown)', () => {
     await expect(pool.query('SELECT 1')).rejects.toThrow(/closed/i);
     // Health check reports unreachable once the pool is closed.
     expect(await ping()).toBe(false);
+    // close() is idempotent — a second call must not throw.
+    await expect(close()).resolves.toBeUndefined();
   });
 });
