@@ -433,3 +433,46 @@ describe('ts-orm CRUD operations', () => {
   });
 
 });
+
+describe('Server-side default columns (R2)', () => {
+  const tsTable = 'ts_default';
+  // `created` is nullable with a CURRENT_TIMESTAMP default, so it can be omitted
+  // from the payload (a required column would be blocked by validation first).
+  const tsStruct = [
+    { name: 'id', type: 'number', required: false, length: null, default: 'auto_increment' },
+    { name: 'name', type: 'string', required: true, length: 64, default: '' },
+    { name: 'created', type: 'datetime', required: false, length: 19, default: 'current_timestamp' }
+  ];
+
+  beforeAll(async () => {
+    const conn = await getConnection();
+    await conn.execute(`DROP TABLE IF EXISTS ${tsTable}`);
+    await conn.execute(`
+      CREATE TABLE ${tsTable} (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(64) NOT NULL,
+        created DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await conn.end();
+  });
+
+  afterAll(async () => {
+    const conn = await getConnection();
+    await conn.execute(`DROP TABLE IF EXISTS ${tsTable}`);
+    await conn.end();
+  });
+
+  test('omitting a CURRENT_TIMESTAMP column lets MySQL fill it (not the literal string)', async () => {
+    // Pre-fix: the string 'current_timestamp' was bound as a parameter into the
+    // DATETIME column -> insert error. Post-fix: the column is omitted from the
+    // INSERT and MySQL applies its default.
+    const res = await create(tsTable, tsStruct, { name: 'TS Default' });
+    expect(res.success).toBe(true);
+
+    const row = await readOne(tsTable, { id: res.data.id });
+    expect(row.success).toBe(true);
+    expect(row.data.created).toBeTruthy();          // DB applied CURRENT_TIMESTAMP
+    expect(row.data.created).not.toBe('current_timestamp');
+  });
+});

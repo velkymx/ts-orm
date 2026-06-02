@@ -29,10 +29,17 @@ export async function create(table: string, struct: Field[], payload: Record<str
         // Validate and escape table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
 
-        // Filter out auto_increment fields
-        const filtered = struct.filter(f => f.default !== 'auto_increment');
-        const columns = filtered.map(f => f.name);
-        const values = filtered.map(f => payload[f.name] ?? f.default);
+        // Columns whose value resolves to a server-side default keyword are
+        // omitted from the INSERT so MySQL computes them (auto_increment ids,
+        // CURRENT_TIMESTAMP columns). Binding the literal string e.g.
+        // 'current_timestamp' would otherwise insert that text into the column.
+        const SERVER_DEFAULTS = new Set(['auto_increment', 'current_timestamp']);
+        const insertFields = struct.filter(f => {
+            const value = payload[f.name] ?? f.default;
+            return !(typeof value === 'string' && SERVER_DEFAULTS.has(value));
+        });
+        const columns = insertFields.map(f => f.name);
+        const values = insertFields.map(f => payload[f.name] ?? f.default);
 
         // Validate and escape column names
         const safeColumns = columns.map(col => validateAndEscapeIdentifier(col, 'column name'));
