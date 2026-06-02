@@ -336,10 +336,11 @@ describe('ts-orm CRUD operations', () => {
     });
   
     expect(res.success).toBe(true);
-    expect(Array.isArray(res.data)).toBe(true);
+    // The related table has no rows yet (inserted by a later test), so an INNER
+    // join yields zero rows. Pinning 0 also exercises the qualified ORDER BY path.
+    expect(res.data.length).toBe(0);
   });
 
-  
   test('Find or fail - success returns the standard envelope', async () => {
     const res = await findOrFail(table, 'id', testId);
     expect(res.success).toBe(true);
