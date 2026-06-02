@@ -134,7 +134,13 @@ export async function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
         await conn.commit();
         return result;
     } catch (error) {
-        await conn.rollback();
+        // Never let a rollback failure (e.g. a broken/closed connection, or a
+        // beginTransaction that threw before a tx existed) replace the real error.
+        try {
+            await conn.rollback();
+        } catch {
+            /* ignore — the original error below is what matters */
+        }
         throw error;
     } finally {
         conn.release();
