@@ -37,7 +37,7 @@ export async function generateStructFromTable(table: string): Promise<Field[]> {
     return columns.map((col): Field => {
       const rawType = col.Type.toLowerCase();
       const lengthMatch = rawType.match(/\((.*?)\)/);
-      const baseType = rawType.split('(')[0];
+      const baseType = rawType.split('(')[0] ?? rawType;
       const isEnum = baseType === 'enum';
       const isAuto = col.Extra.includes('auto_increment');
 
@@ -75,7 +75,7 @@ export async function generateStructFromTable(table: string): Promise<Field[]> {
               : col.Default,
         ...(isEnum
           ? {
-              enum: lengthMatch![1]
+              enum: (lengthMatch?.[1] ?? '')
                 .replace(/'/g, '')
                 .split(',')
             }

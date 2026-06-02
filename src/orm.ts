@@ -126,11 +126,14 @@ export async function readOne(table: string, conditions: Record<string, unknown>
                 throw new Error(`Invalid join condition: ${rightCol}`);
             }
 
-            // Split and escape each part
+            // Split and escape each part. validateQualifiedIdentifier already
+            // guaranteed a `table.column` shape, so both parts are present; `?? ''`
+            // only satisfies the type checker (an empty part would be rejected by
+            // validateAndEscapeIdentifier anyway).
             const [leftTable, leftField] = leftCol.split('.');
             const [rightTable, rightField] = rightCol.split('.');
-            const safeLeftCol = `${validateAndEscapeIdentifier(leftTable, 'table name')}.${validateAndEscapeIdentifier(leftField, 'column name')}`;
-            const safeRightCol = `${validateAndEscapeIdentifier(rightTable, 'table name')}.${validateAndEscapeIdentifier(rightField, 'column name')}`;
+            const safeLeftCol = `${validateAndEscapeIdentifier(leftTable ?? '', 'table name')}.${validateAndEscapeIdentifier(leftField ?? '', 'column name')}`;
+            const safeRightCol = `${validateAndEscapeIdentifier(rightTable ?? '', 'table name')}.${validateAndEscapeIdentifier(rightField ?? '', 'column name')}`;
 
             return `${joinType} JOIN ${safeJoinTable} ON ${safeLeftCol} = ${safeRightCol}`;
         }).join(' ');
@@ -141,7 +144,7 @@ export async function readOne(table: string, conditions: Record<string, unknown>
             if (validateQualifiedIdentifier(options.orderBy)) {
                 // Qualified identifier (table.column)
                 const [orderTable, orderField] = options.orderBy.split('.');
-                const safeOrderBy = `${validateAndEscapeIdentifier(orderTable, 'table name')}.${validateAndEscapeIdentifier(orderField, 'column name')}`;
+                const safeOrderBy = `${validateAndEscapeIdentifier(orderTable ?? '', 'table name')}.${validateAndEscapeIdentifier(orderField ?? '', 'column name')}`;
                 orderClause = `ORDER BY ${safeOrderBy} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`;
             } else {
                 // Simple identifier

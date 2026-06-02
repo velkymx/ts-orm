@@ -570,8 +570,10 @@ export class QueryBuilder {
             // Handle qualified column names (table.column)
             const parseColumn = (col: string): string => {
                 if (col.includes('.')) {
+                    // includes('.') guarantees both parts; `?? ''` only satisfies
+                    // the type checker (an empty part is rejected on escape).
                     const [tbl, field] = col.split('.');
-                    return `${validateAndEscapeIdentifier(tbl, 'table name')}.${validateAndEscapeIdentifier(field, 'column name')}`;
+                    return `${validateAndEscapeIdentifier(tbl ?? '', 'table name')}.${validateAndEscapeIdentifier(field ?? '', 'column name')}`;
                 }
                 return validateAndEscapeIdentifier(col, 'column name');
             };
@@ -656,7 +658,9 @@ export class QueryBuilder {
             const sql = `SELECT COUNT(*) as count FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
             const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
-            return formatResponse(true, 'Count retrieved', (rows as RowDataPacket[])[0].count);
+            // COUNT(*) always yields exactly one row; default to 0 to satisfy the
+            // type checker if the driver ever returns an empty set.
+            return formatResponse(true, 'Count retrieved', (rows as RowDataPacket[])[0]?.count ?? 0);
         } catch (error) {
             return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'count', { table: this.table }));
         }
@@ -708,7 +712,8 @@ export class QueryBuilder {
             // float precision loss. Coerce numeric-looking results to Number so
             // callers get numbers; leave non-numeric results (e.g. MAX of a date
             // or text column) and null untouched.
-            const raw = (rows as RowDataPacket[])[0].result;
+            // An aggregate always yields one row; `?? null` covers the empty case.
+            const raw = (rows as RowDataPacket[])[0]?.result ?? null;
             const value = raw === null || Number.isNaN(Number(raw)) ? raw : Number(raw);
 
             return formatResponse(true, `${func} retrieved`, value);

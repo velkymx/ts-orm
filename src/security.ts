@@ -7,11 +7,13 @@ const QUALIFIED_IDENTIFIER_PATTERN = /^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/;
 
 // Input format validation patterns
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+// Capture groups so the components can be read by index after a match.
+const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// MySQL error code mappings to safe messages
-const ERROR_MESSAGES: Record<string, string> = {
+// MySQL error code mappings to safe messages. `as const` gives each known key a
+// string literal type (so dotted access is never `undefined`).
+const ERROR_MESSAGES = {
     ER_DUP_ENTRY: 'Record already exists',
     ER_DUP_KEY: 'Record already exists',
     ER_NO_REFERENCED_ROW: 'Related record not found',
@@ -25,7 +27,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     ER_ACCESS_DENIED_ERROR: 'Access denied',
     ER_WRONG_VALUE_COUNT: 'Invalid number of values',
     DEFAULT: 'Database operation failed'
-};
+} as const;
 
 // Shape of the errors mysql2 throws: a standard Error plus driver metadata.
 // Typed loosely because the values originate from an untyped catch clause.
@@ -105,14 +107,18 @@ export function isValidDatetime(value: unknown): boolean {
         return false;
     }
 
-    if (!DATETIME_PATTERN.test(value)) {
+    const m = value.match(DATETIME_PATTERN);
+    if (!m) {
         return false;
     }
 
-    // Additional validation: check if it's a valid date
-    const [datePart, timePart] = value.split(' ');
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hour, minute, second] = timePart.split(':').map(Number);
+    // Capture groups are guaranteed present by the match; Number() coerces them.
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    const hour = Number(m[4]);
+    const minute = Number(m[5]);
+    const second = Number(m[6]);
 
     // Basic range checks
     if (month < 1 || month > 12) return false;
@@ -138,12 +144,15 @@ export function isValidDate(value: unknown): boolean {
         return false;
     }
 
-    if (!DATE_PATTERN.test(value)) {
+    const m = value.match(DATE_PATTERN);
+    if (!m) {
         return false;
     }
 
-    // Additional validation: check if it's a valid date
-    const [year, month, day] = value.split('-').map(Number);
+    // Capture groups are guaranteed present by the match; Number() coerces them.
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
 
     // Basic range checks
     if (month < 1 || month > 12) return false;
@@ -191,8 +200,8 @@ export function sanitizeError(error: DbError, operation: string, context: Record
     }
 
     // Return sanitized message based on error code
-    if (error.code && ERROR_MESSAGES[error.code]) {
-        return ERROR_MESSAGES[error.code];
+    if (error.code && error.code in ERROR_MESSAGES) {
+        return ERROR_MESSAGES[error.code as keyof typeof ERROR_MESSAGES];
     }
 
     // Check if error message contains specific patterns

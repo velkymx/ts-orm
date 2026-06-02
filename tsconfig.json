@@ -7,6 +7,9 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    // Index/array access yields `T | undefined`, forcing explicit handling of
+    // missing elements (regex groups, split parts, empty result rows).
+    "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
