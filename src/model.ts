@@ -174,6 +174,13 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
         },
 
         /**
+         * Restrict selected columns and return a query builder.
+         */
+        select(...fields: string[]): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).select(...fields);
+        },
+
+        /**
          * Set ORDER BY and return query builder.
          */
         orderBy(field: string, direction: string = 'ASC'): QueryBuilder<T> {

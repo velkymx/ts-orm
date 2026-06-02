@@ -455,6 +455,17 @@ export class QueryBuilder<T = Record<string, unknown>> {
     }
 
     /**
+     * Restrict the selected columns. Each column is validated + escaped at call
+     * time (it sits in a non-parameterizable SQL position); no args resets to *.
+     */
+    select(...fields: string[]): this {
+        this._select = fields.length === 0
+            ? '*'
+            : fields.map(f => validateAndEscapeIdentifier(f, 'column name')).join(', ');
+        return this;
+    }
+
+    /**
      * Set ORDER BY clause.
      */
     orderBy(field: string, direction: string = 'ASC'): this {

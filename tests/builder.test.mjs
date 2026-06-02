@@ -352,6 +352,32 @@ describe('introspect.generateStructFromTable', () => {
   });
 });
 
+describe('QueryBuilder - select projection', () => {
+  test('select() returns only the named columns', async () => {
+    const res = await qb(usersTable).select('name', 'city').where('city', 'NYC').get();
+    expect(res.success).toBe(true);
+    const row = res.data[0];
+    expect(Object.keys(row).sort()).toEqual(['city', 'name']);
+  });
+
+  test('select() with no args keeps SELECT *', async () => {
+    const res = await qb(usersTable).select().where('city', 'NYC').get();
+    expect(res.success).toBe(true);
+    expect(Object.keys(res.data[0]).length).toBeGreaterThan(2);
+  });
+
+  test('select() escapes/validates columns (injection rejected)', () => {
+    expect(() => qb(usersTable).select('name; DROP TABLE x--')).toThrow(/^Invalid/);
+  });
+
+  test('model.select() projects columns', async () => {
+    const M = model(usersTable, usersStruct);
+    const res = await M.select('email').where('city', 'NYC').get();
+    expect(res.success).toBe(true);
+    expect(Object.keys(res.data[0])).toEqual(['email']);
+  });
+});
+
 describe('QueryBuilder - non-finite limit/offset', () => {
   test('a non-finite limit is ignored (no LIMIT NaN error)', async () => {
     const res = await qb(usersTable).limit('abc').get();
