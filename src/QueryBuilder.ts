@@ -4,12 +4,20 @@ import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import { castReadRows } from './casts.js';
 import type { Field } from './validator.js';
 
-// Standard envelope returned by every data operation.
-export interface OrmResponse<T = unknown> {
-    success: boolean;
+// Standard envelope returned by every data operation. Discriminated on `success`
+// so `data` is the row type on success and the error payload on failure — reading
+// `data` is only sound after checking `success`.
+export interface OrmSuccess<T> {
+    success: true;
     message: string;
     data: T;
 }
+export interface OrmFailure {
+    success: false;
+    message: string;
+    data: string | string[] | null;
+}
+export type OrmResponse<T = unknown> = OrmSuccess<T> | OrmFailure;
 
 // Accumulated WHERE conditions, as a discriminated union on `type` so each
 // variant exposes exactly the fields it uses (no non-null assertions/casts).

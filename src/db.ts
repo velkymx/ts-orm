@@ -152,9 +152,11 @@ export async function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
     }
 }
 
-// Standard envelope returned by every data operation.
+// Standard envelope returned by every data operation. `success` is a runtime
+// boolean here, so the literal-typed discriminated union is asserted at this one
+// construction boundary.
 export function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
-    return { success, message, data };
+    return { success, message, data } as OrmResponse;
 }
 
 // Build the `LIMIT x OFFSET y` fragment. `!= null` honors an explicit 0. MySQL

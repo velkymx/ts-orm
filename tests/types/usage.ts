@@ -16,6 +16,10 @@ async function check(): Promise<void> {
   if (found.success) {
     const name: string = found.data.name;
     void name;
+  } else {
+    // Discriminated: on the failure branch, data is the error payload, not User.
+    const err: string | string[] | null = found.data;
+    void err;
   }
 
   // all -> OrmResponse<User[]>
