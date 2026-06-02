@@ -126,9 +126,13 @@ export function formatResponse(success: boolean, message: string, data: unknown 
 // requires LIMIT before OFFSET, so an offset without a limit gets the documented
 // max-row sentinel (2^64 - 1). Shared by orm.read/readWith and QueryBuilder.
 export function limitOffsetClause(limit: number | null, offset: number | null): string {
-    const limitSql = limit != null ? `LIMIT ${limit}` : '';
-    const offsetSql = offset != null
-        ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
+    // Treat non-finite values (e.g. parseInt('abc') -> NaN) as absent so a bad
+    // input is ignored rather than emitting `LIMIT NaN` (a SQL error).
+    const hasLimit = limit != null && Number.isFinite(limit);
+    const hasOffset = offset != null && Number.isFinite(offset);
+    const limitSql = hasLimit ? `LIMIT ${limit}` : '';
+    const offsetSql = hasOffset
+        ? (hasLimit ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
         : '';
     return `${limitSql} ${offsetSql}`.trim();
 }

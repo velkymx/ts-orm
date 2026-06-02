@@ -352,6 +352,14 @@ describe('introspect.generateStructFromTable', () => {
   });
 });
 
+describe('QueryBuilder - non-finite limit/offset', () => {
+  test('a non-finite limit is ignored (no LIMIT NaN error)', async () => {
+    const res = await qb(usersTable).limit('abc').get();
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBe(4); // limit ignored -> all rows
+  });
+});
+
 describe('QueryBuilder - offset without limit', () => {
   test('offset without a limit skips rows and returns the remainder', async () => {
     // Exercises the LIMIT 18446744073709551615 OFFSET n sentinel (MySQL needs a

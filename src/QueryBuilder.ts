@@ -642,6 +642,8 @@ export class QueryBuilder {
      * Execute query and return first result.
      */
     async first(): Promise<OrmResponse> {
+        // first() returns a single record, so it always caps the query at one
+        // row — any previously set .limit() is intentionally overridden.
         this._limit = 1;
         return firstRow(await this.get());
     }

@@ -8,7 +8,7 @@ import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError
 // Query shaping options shared by read/readWith.
 export interface ReadOptions {
     orderBy?: string;
-    direction?: string;
+    direction?: 'ASC' | 'DESC';
     limit?: number | string;
     offset?: number | string;
 }
@@ -18,7 +18,7 @@ export interface ReadOptions {
 export interface JoinSpec {
     type?: string;
     table: string;
-    on: [string, string] | string[];
+    on: [string, string];
 }
 
 export async function create(table: string, struct: Field[], payload: Record<string, unknown>): Promise<OrmResponse> {
@@ -88,16 +88,16 @@ export async function read(table: string, conditions: Record<string, unknown> = 
 
 export async function readOne(table: string, conditions: Record<string, unknown> = {}): Promise<OrmResponse> {
     return firstRow(await read(table, conditions));
-  }
+}
 
-  export async function findOrFail(table: string, key: string, value: unknown): Promise<OrmResponse> {
+export async function findOrFail(table: string, key: string, value: unknown): Promise<OrmResponse> {
     // Consistent contract: every op returns the {success,message,data} envelope.
     // readOne already yields 'Record found' / 'Record not found' — return it
     // directly rather than throwing.
     return readOne(table, { [key]: value });
-  }
+}
 
-  export async function readWith(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {
+export async function readWith(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {
     try {
         // Validate and escape main table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
