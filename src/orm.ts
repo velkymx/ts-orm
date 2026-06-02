@@ -2,7 +2,7 @@ import type { ResultSetHeader, ExecuteValues } from 'mysql2';
 import { validatePayload } from './validator.js';
 import type { Field } from './validator.js';
 import type { OrmResponse } from './QueryBuilder.js';
-import { pool, formatResponse, firstRow } from './db.js';
+import { pool, formatResponse, firstRow, limitOffsetClause } from './db.js';
 import { validateAndEscapeIdentifier, validateQualifiedIdentifier, sanitizeError } from './security.js';
 
 // Query shaping options shared by read/readWith.
@@ -72,16 +72,12 @@ export async function read(table: string, conditions: Record<string, unknown> = 
             ? `ORDER BY ${validateAndEscapeIdentifier(options.orderBy, 'order by column')} ${options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'}`
             : '';
 
-        // MySQL requires LIMIT before OFFSET; emit the max-row sentinel when an
-        // offset is supplied without a limit. != null honors an explicit 0.
+        // Parse to numbers; the shared builder handles the OFFSET-needs-LIMIT rule.
         const limit = options.limit != null ? Number.parseInt(String(options.limit), 10) : null;
         const offset = options.offset != null ? Number.parseInt(String(options.offset), 10) : null;
-        const limitClause = limit != null ? `LIMIT ${limit}` : '';
-        const offsetClause = offset != null
-            ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
-            : '';
+        const limitOffset = limitOffsetClause(limit, offset);
 
-        const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+        const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
         const [rows] = await pool.execute(sql, keys.map(k => conditions[k]) as ExecuteValues[]);
         return formatResponse(true, 'Data retrieved', rows);
@@ -153,16 +149,12 @@ export async function readOne(table: string, conditions: Record<string, unknown>
             }
         }
 
-        // MySQL requires LIMIT before OFFSET; emit the max-row sentinel when an
-        // offset is supplied without a limit. != null honors an explicit 0.
+        // Parse to numbers; the shared builder handles the OFFSET-needs-LIMIT rule.
         const limit = options.limit != null ? Number.parseInt(String(options.limit), 10) : null;
         const offset = options.offset != null ? Number.parseInt(String(options.offset), 10) : null;
-        const limitClause = limit != null ? `LIMIT ${limit}` : '';
-        const offsetClause = offset != null
-            ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
-            : '';
+        const limitOffset = limitOffsetClause(limit, offset);
 
-        const sql = `SELECT * FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+        const sql = `SELECT * FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
         const values = whereKeys.map(k => conditions[k]);
 

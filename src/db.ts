@@ -25,6 +25,17 @@ export function formatResponse(success: boolean, message: string, data: unknown 
     return { success, message, data };
 }
 
+// Build the `LIMIT x OFFSET y` fragment. `!= null` honors an explicit 0. MySQL
+// requires LIMIT before OFFSET, so an offset without a limit gets the documented
+// max-row sentinel (2^64 - 1). Shared by orm.read/readWith and QueryBuilder.
+export function limitOffsetClause(limit: number | null, offset: number | null): string {
+    const limitSql = limit != null ? `LIMIT ${limit}` : '';
+    const offsetSql = offset != null
+        ? (limit != null ? `OFFSET ${offset}` : `LIMIT 18446744073709551615 OFFSET ${offset}`)
+        : '';
+    return `${limitSql} ${offsetSql}`.trim();
+}
+
 // Reduce a multi-row result envelope to a single-record one: the first row, or a
 // not-found / failed envelope. Shared by orm.readOne and QueryBuilder.first().
 export function firstRow(result: OrmResponse): OrmResponse {

@@ -1,5 +1,5 @@
 import type { RowDataPacket, ExecuteValues } from 'mysql2';
-import { pool, formatResponse, firstRow } from './db.js';
+import { pool, formatResponse, firstRow, limitOffsetClause } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field } from './validator.js';
 
@@ -597,15 +597,9 @@ export class QueryBuilder {
                 ? `ORDER BY ${validateAndEscapeIdentifier(this._orderBy, 'order by column')} ${this._direction}`
                 : '';
 
-            // != null so an explicit limit/offset of 0 is honored. MySQL requires
-            // LIMIT to precede OFFSET, so when an offset is given without a limit
-            // we prepend the documented max-row sentinel (2^64 - 1).
-            const limitClause = this._limit != null ? `LIMIT ${this._limit}` : '';
-            const offsetClause = this._offset != null
-                ? (this._limit != null ? `OFFSET ${this._offset}` : `LIMIT 18446744073709551615 OFFSET ${this._offset}`)
-                : '';
+            const limitOffset = limitOffsetClause(this._limit, this._offset);
 
-            const sql = `SELECT ${safeField} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+            const sql = `SELECT ${safeField} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
             const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
 
@@ -631,15 +625,9 @@ export class QueryBuilder {
                 ? `ORDER BY ${validateAndEscapeIdentifier(this._orderBy, 'order by column')} ${this._direction}`
                 : '';
 
-            // != null so an explicit limit/offset of 0 is honored. MySQL requires
-            // LIMIT to precede OFFSET, so when an offset is given without a limit
-            // we prepend the documented max-row sentinel (2^64 - 1).
-            const limitClause = this._limit != null ? `LIMIT ${this._limit}` : '';
-            const offsetClause = this._offset != null
-                ? (this._limit != null ? `OFFSET ${this._offset}` : `LIMIT 18446744073709551615 OFFSET ${this._offset}`)
-                : '';
+            const limitOffset = limitOffsetClause(this._limit, this._offset);
 
-            const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitClause} ${offsetClause}`.trim();
+            const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
             const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
             return formatResponse(true, 'Data retrieved', rows);
