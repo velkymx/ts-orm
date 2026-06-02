@@ -36,7 +36,8 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
         },
 
         /**
-         * Find a record by primary key or throw error.
+         * Find a record by primary key. Returns the standard {success,...}
+         * envelope (success:false with 'Record not found' when absent).
          */
         async findOrFail(id: unknown) {
             return findOrFail(table, primaryKey, id);

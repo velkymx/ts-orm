@@ -108,14 +108,11 @@ export async function readOne(table: string, conditions: Record<string, unknown>
     };
   }
 
-  export async function findOrFail(table: string, key: string, value: unknown): Promise<unknown> {
-    const result = await readOne(table, { [key]: value });
-
-    if (!result.success || !result.data) {
-      throw new Error('Record not found');
-    }
-
-    return result.data;
+  export async function findOrFail(table: string, key: string, value: unknown): Promise<OrmResponse> {
+    // Consistent contract: every op returns the {success,message,data} envelope.
+    // readOne already yields 'Record found' / 'Record not found' — return it
+    // directly rather than throwing.
+    return readOne(table, { [key]: value });
   }
 
   export async function readWith(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {

@@ -332,10 +332,10 @@ describe('ts-orm CRUD operations', () => {
   });
 
   
-  test('Find or fail - success', async () => {
-    const record = await findOrFail(table, 'id', testId);
-    expect(record).toBeDefined();
-    expect(record.id).toBe(testId);
+  test('Find or fail - success returns the standard envelope', async () => {
+    const res = await findOrFail(table, 'id', testId);
+    expect(res.success).toBe(true);
+    expect(res.data.id).toBe(testId);
   });
 
   test('Insert related record for join', async () => {
@@ -386,8 +386,11 @@ describe('ts-orm CRUD operations', () => {
     expect(res.data.length).toBe(0);
   });
 
-  test('Find or fail - throws error', async () => {
-    await expect(findOrFail(table, 'id', 'non-existent-id')).rejects.toThrow('Record not found');
+  test('Find or fail - missing record returns a failure envelope (no throw)', async () => {
+    const res = await findOrFail(table, 'id', 'non-existent-id');
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Record not found');
+    expect(res.data).toBeNull();
   });
 
   describe('Auto-increment ID support', () => {

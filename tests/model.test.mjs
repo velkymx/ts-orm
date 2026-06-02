@@ -90,13 +90,17 @@ describe('Model API Tests', () => {
       expect(result.data.name).toBe('User 0');
     });
 
-    test('findOrFail() - retrieve record or throw', async () => {
-      const record = await User.findOrFail(testUsers[0].id);
-      expect(record.id).toBe(testUsers[0].id);
+    test('findOrFail() - returns the standard envelope on success', async () => {
+      const res = await User.findOrFail(testUsers[0].id);
+      expect(res.success).toBe(true);
+      expect(res.data.id).toBe(testUsers[0].id);
     });
 
-    test('findOrFail() - throws on missing record', async () => {
-      await expect(User.findOrFail('non-existent')).rejects.toThrow('Record not found');
+    test('findOrFail() - missing record returns a failure envelope (no throw)', async () => {
+      const res = await User.findOrFail('non-existent');
+      expect(res.success).toBe(false);
+      expect(res.message).toBe('Record not found');
+      expect(res.data).toBeNull();
     });
 
     test('all() - get all records', async () => {
