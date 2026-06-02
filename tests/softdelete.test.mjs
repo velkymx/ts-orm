@@ -58,6 +58,22 @@ describe('soft deletes', () => {
     expect((await M.onlyTrashed().get()).data.length).toBe(0);
   });
 
+  test('soft-delete scope is qualified to the base table under joins', async () => {
+    const c = await conn();
+    await c.execute('DROP TABLE IF EXISTS sd_orders');
+    // Joined table ALSO has deleted_at — unqualified scope would be ambiguous.
+    await c.execute('CREATE TABLE sd_orders (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, deleted_at DATETIME NULL)');
+    await c.end();
+
+    const M = model(table, struct, { softDelete: true });
+    const res = await M.query().innerJoin('sd_orders', `${table}.id`, 'sd_orders.user_id').get();
+    expect(res.success).toBe(true); // no "ambiguous column 'deleted_at'" error
+
+    const c2 = await conn();
+    await c2.execute('DROP TABLE IF EXISTS sd_orders');
+    await c2.end();
+  });
+
   test('softDelete requires the deleted_at column in the struct', () => {
     const noCol = [
       { name: 'id', type: 'number', required: false, length: null, default: 'auto_increment' },

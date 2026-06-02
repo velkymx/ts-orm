@@ -574,8 +574,12 @@ export class QueryBuilder<T = Record<string, unknown>> {
         // Soft-delete scope: hide deleted rows by default; withTrashed() includes
         // them; onlyTrashed() returns just the deleted ones. No bindings needed.
         if (this._softDeleteColumn && this._trashed !== 'with') {
+            // Qualify with the base table so the scope is unambiguous when a joined
+            // table also has a deleted_at column.
+            const safeTable = validateAndEscapeIdentifier(this.table, 'table name');
             const col = validateAndEscapeIdentifier(this._softDeleteColumn, 'column name');
-            const predicate = this._trashed === 'only' ? `${col} IS NOT NULL` : `${col} IS NULL`;
+            const qualified = `${safeTable}.${col}`;
+            const predicate = this._trashed === 'only' ? `${qualified} IS NOT NULL` : `${qualified} IS NULL`;
             whereParts.push(`${whereParts.length ? ' AND ' : ''}${predicate}`);
         }
 
