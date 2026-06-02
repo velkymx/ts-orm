@@ -208,20 +208,14 @@ describe('Security Tests', () => {
     expect(res.message).toBe('No fields to update');
   });
 
-  test('Allows null for non-required enum field', async () => {
-    const testPayload = {
-      ...basePayload,
-      id: randomUUID(),
-      commission_type: null,
-      opt_shareclient: false
-    };
-    const res = await create(table, struct, testPayload);
-    // This will fail without DB connection, but validates the validation logic
-    expect(res.success).toBe(false);
-    // Should not have validation errors about commission_type
-    if (Array.isArray(res.data)) {
-      expect(res.data.some(err => err.includes('commission_type'))).toBe(false);
-    }
+  test('validatePayload allows null for a non-required enum field', () => {
+    // Pure validation unit: a null value for a non-required enum produces no
+    // error. (Replaces an older test that only passed because the `test` table
+    // is absent in this describe — it proved nothing about enum handling.)
+    const enumStruct = [
+      { name: 'kind', type: 'enum', required: false, length: null, default: null, enum: ['a', 'b'] }
+    ];
+    expect(validatePayload(enumStruct, { kind: null })).toEqual([]);
   });
 });
 
