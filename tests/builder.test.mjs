@@ -277,6 +277,22 @@ describe('introspect.generateStructFromTable', () => {
   test('throws a sanitized error for a missing table (no raw DB detail)', async () => {
     await expect(generateStructFromTable('definitely_not_a_table_xyz')).rejects.toThrow('Table not found');
   });
+
+  test('parses enum values cleanly (no stray whitespace)', async () => {
+    const c = await getConnection();
+    await c.execute('DROP TABLE IF EXISTS b_enum');
+    // Intentionally spaced enum definition — verify the parsed values are trimmed.
+    await c.execute("CREATE TABLE b_enum (id INT PRIMARY KEY, kind ENUM('a', 'b', 'c'))");
+    await c.end();
+
+    const struct = await generateStructFromTable('b_enum');
+    const kind = struct.find(f => f.name === 'kind');
+    expect(kind.enum).toEqual(['a', 'b', 'c']);
+
+    const c2 = await getConnection();
+    await c2.execute('DROP TABLE IF EXISTS b_enum');
+    await c2.end();
+  });
 });
 
 describe('Validator/security edge cases', () => {
