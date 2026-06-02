@@ -1,5 +1,13 @@
 # VibeORM
 
+[![Node.js CI](https://github.com/velkymx/ts-orm/actions/workflows/node.js.yml/badge.svg)](https://github.com/velkymx/ts-orm/actions/workflows/node.js.yml)
+[![npm version](https://img.shields.io/npm/v/@velkymx/vibeorm.svg)](https://www.npmjs.com/package/@velkymx/vibeorm)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520.19-339933.svg)](https://nodejs.org/)
+[![MySQL | MariaDB](https://img.shields.io/badge/MySQL%20%7C%20MariaDB-tested-f29111.svg)](#database-support)
+[![coverage](https://img.shields.io/badge/coverage-~94%25-brightgreen.svg)](#testing)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
+
 A lightweight ORM for Node.js and MySQL2 with an Eloquent-like Model API and a chainable query builder. Schemas are plain JSON arrays, or you can auto-generate them from your existing database with the CLI.
 
 ---
@@ -8,11 +16,17 @@ A lightweight ORM for Node.js and MySQL2 with an Eloquent-like Model API and a c
 
 - Eloquent-like Model API — chainable, readable, no decorators
 - Function-based CRUD API — small, predictable, callable from anywhere
-- Advanced query builder — `where`/`orWhere`/`whereIn`/`whereLike`/`whereAny`/`whereAll`/`whereNone`, `innerJoin`/`leftJoin`/`rightJoin`/`outerJoin`, `count`/`sum`/`avg`/`max`/`min`, `pluck`
+- Advanced query builder — `where`/`orWhere`/`whereIn`/`whereLike`/`whereAny`/`whereAll`/`whereNone`, `innerJoin`/`leftJoin`/`rightJoin`/`outerJoin`, `count`/`sum`/`avg`/`max`/`min`, `pluck`, `select`
+- Typed rows — `model<User>('users', struct)` flows `OrmResponse<User>` / `OrmResponse<User[]>`
+- Transactions — `withTransaction(fn)` (atomic, auto-routed via AsyncLocalStorage)
+- Soft deletes — `{ softDelete: true }`: auto-scoped reads, `withTrashed`/`onlyTrashed`/`restore`
+- Casts — `boolean` (TINYINT ↔ bool) and `json` (text ↔ object) on read/write
 - Auto-generate structs from MySQL tables — `npx vibeorm struct <table>`
 - Identifier allowlist + operator allowlist + error sanitization
-- Pluggable logger — ship your own pino/winston adapter
-- TypeScript build, ships `dist/` with `.d.ts` types
+- Pluggable logger — ship your own pino/winston adapter; query/slow-query logging
+- Health + lifecycle — `ping()` readiness probe, `close()` graceful shutdown
+- MySQL, MariaDB, RDS/Aurora-MySQL (optional TLS) — config only
+- TypeScript build, ships `dist/` with `.d.ts` + declaration maps
 - Single shared mysql2 connection pool
 
 ---
@@ -38,6 +52,11 @@ DB_DATABASE=myapp
 # DB_SSL=Amazon RDS        # mysql2's bundled RDS CA bundle (verified)
 # DB_SSL=no-verify         # TLS without cert verification (self-signed)
 # DB_SSL=true              # verified TLS
+
+# Optional pool tuning / observability
+# DB_CONNECTION_LIMIT=10   # max pooled connections (default mysql2 = 10)
+# DB_CONNECT_TIMEOUT=10000 # connect timeout in ms
+# DB_SLOW_QUERY_MS=200     # warn-log queries slower than this (0/unset = off)
 ```
 
 ---
@@ -144,7 +163,7 @@ npx vibeorm struct posts
 for t in users posts comments; do npx vibeorm struct $t; done
 ```
 
-The introspector maps MySQL types to ORM types (`int/bigint` → `number`, `tinyint` → `boolean`, `varchar/char/text` → `string`, `date` → `date`, `datetime/timestamp` → `datetime`, `enum` → `enum`, `json` → `string`), detects `CHAR(36)`/`VARCHAR(36)` UUIDs by name, flags `auto_increment` columns, and handles `CURRENT_TIMESTAMP` defaults. Failures are sanitized (no schema/credential leakage) and re-thrown with the full error logged server-side.
+The introspector maps MySQL types to ORM types (`int/bigint` → `number`, `tinyint` → `boolean`, `varchar/char/text` → `string`, `date` → `date`, `datetime/timestamp` → `datetime`, `enum` → `enum`, `json` → `json`, `decimal/numeric/float/double/smallint/mediumint` → `number`), detects `CHAR(36)`/`VARCHAR(36)` UUIDs by name, flags `auto_increment` columns, and handles `CURRENT_TIMESTAMP` defaults. Failures are sanitized (no schema/credential leakage) and re-thrown with the full error logged server-side.
 
 ---
 
@@ -249,12 +268,14 @@ User.where('status', 'active').pluck('email');  // -> { success, message, data: 
 | `date`           | Date only                            | Must match `YYYY-MM-DD`                                               |
 | `boolean`        | Boolean flag                         | `true` / `false` / `0` / `1` only; stored as TINYINT                  |
 | `enum`           | Predefined set                       | Requires `enum: [...]`; `null`/`undefined` allowed when not required  |
+| `json`           | JSON column                          | Cast on read (text → object/array) and write (object → JSON text)    |
+| `boolean`        | (see above) cast on read 0/1 → `true`/`false`, write `true`/`false` → 0/1 |                                |
 | `auto_increment` | Special case (a `number` with `default: 'auto_increment'`) | Caller must not supply on insert                       |
 
 ```ts
 interface Field {
   name: string;
-  type: 'number' | 'string' | 'uuid' | 'datetime' | 'date' | 'boolean' | 'enum';
+  type: 'number' | 'string' | 'uuid' | 'datetime' | 'date' | 'boolean' | 'enum' | 'json';
   required?: boolean;
   length?: number | null;
   default?: unknown;
@@ -286,6 +307,112 @@ setLogger({
 ```
 
 Errors are sanitized before reaching the logger: only error metadata and context (operation, table) are emitted. Bound values are never logged, so PII stays out of your log pipeline.
+
+---
+
+## Typed Models
+
+Pass a row type to `model` and it flows to every read:
+
+```ts
+interface User { id: number; name: string; email: string; }
+
+const User = model<User>('users', userStruct);
+
+const r = await User.find(1);
+if (r.success) r.data.name;          // typed as User
+
+const list = await User.all();
+if (list.success) list.data[0]?.email; // typed as User[]
+```
+
+Defaults to `Record<string, unknown>`, so untyped callers are unaffected. Generics are compile-time only — no runtime cost.
+
+---
+
+## Transactions
+
+`withTransaction(fn)` runs every operation inside `fn` on one connection — commit on resolve, rollback on throw (re-thrown). Routing is automatic (via `AsyncLocalStorage`); ops keep their normal signatures. Nested calls join the outer transaction.
+
+```js
+import { withTransaction, model } from '@velkymx/vibeorm';
+const Account = model('accounts', accountStruct);
+
+await withTransaction(async () => {
+  await Account.update({ id: 1, balance: 900 });
+  await Account.update({ id: 2, balance: 1100 });
+  // throw here -> both updates roll back
+});
+```
+
+---
+
+## Soft Deletes
+
+Enable per model. `delete()` then sets `deleted_at` instead of removing the row, and reads auto-scope out deleted rows.
+
+```js
+const User = model('users', userStruct, { softDelete: true /* , deletedAt: 'deleted_at' */ });
+
+await User.delete(1);                     // UPDATE ... SET deleted_at = NOW()
+await User.all();                         // excludes soft-deleted
+await User.withTrashed().get();           // includes them
+await User.onlyTrashed().get();           // only deleted
+await User.restore(1);                    // clears deleted_at
+```
+
+Without `softDelete`, `delete()` is a hard `DELETE`.
+
+---
+
+## Casts
+
+`boolean` and `json` fields are converted between DB and JS automatically — read (DB → JS) in `get`/`find`/`all`/`first` and write (JS → DB) in `create`/`update`:
+
+```js
+await User.create({ active: true, meta: { plan: 'pro' } });
+// stored as TINYINT 1 and JSON text
+
+const u = (await User.find(1)).data;
+u.active; // true (boolean, not 0/1)
+u.meta;   // { plan: 'pro' } (object, not a string)
+```
+
+`null`/`undefined` pass through; invalid JSON is left as the raw string.
+
+---
+
+## Health & Shutdown
+
+```js
+import { ping, close } from '@velkymx/vibeorm';
+
+await ping();   // true if the DB is reachable, false otherwise (readiness/liveness)
+
+process.on('SIGTERM', async () => {
+  await close(); // end the shared pool so the process can exit
+  process.exit(0);
+});
+```
+
+---
+
+## Database Support
+
+VibeORM speaks the MySQL wire protocol, so **MySQL**, **MariaDB**, and **RDS / Aurora-MySQL** all work via connection config alone (`DB_*` env, optional `DB_SSL`). CI runs the full suite against both MySQL 8 and MariaDB 11. PostgreSQL and SQLite are not supported.
+
+---
+
+## Testing
+
+Tests run against a real, throwaway MySQL (an ephemeral `mysqld` locally via `mysql-memory-server`, or a service container in CI) — no live database needed.
+
+```bash
+npm test            # run the suite
+npm run test:coverage
+npm run typecheck
+npm run build
+```
 
 ---
 
@@ -361,6 +488,8 @@ const u = await findOrFail('users', 'id', '123e4567-e89b-12d3-a456-426614174000'
 | `model(table, struct, opts?)`       | Returns a Model with `find` / `findOrFail` / `create` / `update` / `delete` / `where` / etc. |
 | `QueryBuilder`                      | Class form of the chainable builder; identical to the one `model().where()` returns |
 | `setLogger` / `getLogger` / `createConsoleLogger` | Pluggable logging — see the section above               |
+| `withTransaction`                   | Run operations atomically (commit/rollback)                          |
+| `ping` / `close`                    | Readiness probe / graceful pool shutdown                             |
 | `Field`, `FieldType`, `ValidateOptions`, `OrmResponse`, `Logger`, `LogLevel` | Shared TypeScript types                  |
 | `validatePayload`                   | Reusable validator — useful in Express middleware / CLI tooling       |
 
