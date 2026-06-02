@@ -56,3 +56,36 @@ describe('Logger', () => {
     expect(Object.keys(logged).sort()).toEqual(['code', 'context', 'errno', 'error', 'sqlState']);
   });
 });
+
+describe('sanitizeError — code/message mapping', () => {
+  beforeEach(() => {
+    // Silence logging; we only assert the returned client-safe string.
+    setLogger({ debug() {}, info() {}, warn() {}, error() {} });
+  });
+  afterEach(() => {
+    setLogger(createConsoleLogger());
+  });
+
+  // Build a mysql2-shaped error: standard Error + optional driver `code`.
+  const err = (message, code) => Object.assign(new Error(message), code ? { code } : {});
+
+  test('maps known driver codes to safe messages', () => {
+    expect(sanitizeError(err('raw', 'ER_DUP_ENTRY'), 'create')).toBe('Record already exists');
+    expect(sanitizeError(err('raw', 'ER_NO_REFERENCED_ROW'), 'create')).toBe('Related record not found');
+    expect(sanitizeError(err('raw', 'ER_NO_SUCH_TABLE'), 'read')).toBe('Table not found');
+  });
+
+  test('maps message patterns when no code is present', () => {
+    expect(sanitizeError(err('Duplicate entry 5 for key PRIMARY'), 'create')).toBe('Record already exists');
+    expect(sanitizeError(err('Cannot delete: a foreign key constraint fails'), 'remove'))
+      .toBe('Cannot delete record - it is referenced by other records');
+  });
+
+  test('passes through our own Invalid* validation messages', () => {
+    expect(sanitizeError(err('Invalid column name: x'), 'read')).toBe('Invalid column name: x');
+  });
+
+  test('unknown errors fall back to the default safe message', () => {
+    expect(sanitizeError(err('some random driver failure'), 'read')).toBe('Database operation failed');
+  });
+});
