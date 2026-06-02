@@ -58,6 +58,14 @@ describe('soft deletes', () => {
     expect((await M.onlyTrashed().get()).data.length).toBe(0);
   });
 
+  test('softDelete requires the deleted_at column in the struct', () => {
+    const noCol = [
+      { name: 'id', type: 'number', required: false, length: null, default: 'auto_increment' },
+      { name: 'name', type: 'string', required: true, length: 64, default: '' }
+    ];
+    expect(() => model(table, noCol, { softDelete: true })).toThrow(/deleted_at/);
+  });
+
   test('without softDelete, delete() is a hard delete', async () => {
     const M = model(table, struct); // no softDelete
     const created = await M.create({ name: 'hard' });

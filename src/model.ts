@@ -22,6 +22,12 @@ export function model<T = Record<string, unknown>>(
     // Soft-delete column when enabled (default 'deleted_at'), else null. Passed to
     // every QueryBuilder so reads auto-scope out deleted rows.
     const softDeleteColumn = options.softDelete ? (options.deletedAt || 'deleted_at') : null;
+    // Fail fast: soft delete writes/clears this column via update(), which only
+    // touches columns present in the struct. Without it, delete() would silently
+    // do nothing (data retained), so require it up front.
+    if (softDeleteColumn && !struct.some(f => f.name === softDeleteColumn)) {
+        throw new Error(`softDelete enabled but column '${softDeleteColumn}' is missing from the struct`);
+    }
 
     return {
         table,
