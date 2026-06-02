@@ -3,6 +3,7 @@ import {
   read,
   readOne,
   readWith,
+  findOrFail,
   update,
   remove
 } from '../src/orm.js';
@@ -302,6 +303,16 @@ describe('ts-orm CRUD operations', () => {
     expect(res.success).toBe(true);
     expect(res.data.length).toBe(1);
     expect(res.data[0].name).toBe("Test Record");
+  });
+
+  test('findOrFail (orm) returns the record envelope', async () => {
+    const found = await findOrFail(table, 'id', testId);
+    expect(found.success).toBe(true);
+    expect(found.data.id).toBe(testId);
+
+    const missing = await findOrFail(table, 'id', 'no-such-id');
+    expect(missing.success).toBe(false);
+    expect(missing.message).toBe('Record not found');
   });
 
   test('Read sorted records with orderBy DESC', async () => {

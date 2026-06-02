@@ -107,6 +107,18 @@ describe('Model API Tests', () => {
       expect(result.data.length).toBe(10);
     });
 
+    test('all() - with conditions filters', async () => {
+      const result = await User.all({ status: 'active' });
+      expect(result.success).toBe(true);
+      expect(result.data.every(u => u.status === 'active')).toBe(true);
+    });
+
+    test('offset() model method skips rows', async () => {
+      const result = await User.offset(0).get();
+      expect(result.success).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
+    });
+
     test('first() - get first record with condition', async () => {
       const result = await User.first({ status: 'active' });
       expect(result.success).toBe(true);

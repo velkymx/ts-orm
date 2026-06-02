@@ -1,7 +1,6 @@
-import { create, read, readOne, readWith, findOrFail, update, remove } from './orm.js';
+import { create, readWith, update, remove } from './orm.js';
 import type { JoinSpec, ReadOptions } from './orm.js';
 import { QueryBuilder } from './QueryBuilder.js';
-import { castReadRow, castReadRows } from './casts.js';
 import type { Field } from './validator.js';
 
 /**
@@ -14,8 +13,15 @@ import type { Field } from './validator.js';
  * await User.create({ name: 'Alice' });
  * const active = await User.where('status', 'active').get();
  */
-export function model<T = Record<string, unknown>>(table: string, struct: Field[], options: { primaryKey?: string } = {}) {
+export function model<T = Record<string, unknown>>(
+    table: string,
+    struct: Field[],
+    options: { primaryKey?: string; softDelete?: boolean; deletedAt?: string } = {}
+) {
     const primaryKey = options.primaryKey || 'id';
+    // Soft-delete column when enabled (default 'deleted_at'), else null. Passed to
+    // every QueryBuilder so reads auto-scope out deleted rows.
+    const softDeleteColumn = options.softDelete ? (options.deletedAt || 'deleted_at') : null;
 
     return {
         table,
@@ -26,16 +32,15 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * Create a new query builder instance.
          */
         query(): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn);
         },
 
         /**
          * Find a record by primary key.
          */
         async find(id: unknown) {
-            const r = await readOne<T>(table, { [primaryKey]: id });
-            if (r.success && r.data) castReadRow(r.data as Record<string, unknown>, struct);
-            return r;
+            // Via QueryBuilder so casts + soft-delete scope apply.
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).where(primaryKey, id).first();
         },
 
         /**
@@ -43,9 +48,7 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * envelope (success:false with 'Record not found' when absent).
          */
         async findOrFail(id: unknown) {
-            const r = await findOrFail<T>(table, primaryKey, id);
-            if (r.success && r.data) castReadRow(r.data as Record<string, unknown>, struct);
-            return r;
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).where(primaryKey, id).first();
         },
 
         /**
@@ -53,7 +56,7 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * where(field, operator, value), or a conditions object.
          */
         where(fieldOrConditions: string | Record<string, unknown>, operatorOrValue?: unknown, value?: unknown): QueryBuilder<T> {
-            const builder = new QueryBuilder<T>(table, struct);
+            const builder = new QueryBuilder<T>(table, struct, softDeleteColumn);
 
             // If first argument is an object, treat as key-value conditions
             if (typeof fieldOrConditions === 'object' && fieldOrConditions !== null) {
@@ -77,39 +80,39 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * Start a WHERE IN query.
          */
         whereIn(field: string, values: unknown[]): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).whereIn(field, values);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).whereIn(field, values);
         },
 
         /**
          * Start a WHERE NULL query.
          */
         whereNull(field: string): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).whereNull(field);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).whereNull(field);
         },
 
         /**
          * Start a WHERE NOT NULL query.
          */
         whereNotNull(field: string): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).whereNotNull(field);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).whereNotNull(field);
         },
 
         /**
          * Get all records.
          */
         async all(conditions: Record<string, unknown> = {}) {
-            const r = await read<T>(table, conditions);
-            if (r.success) castReadRows(r.data, struct);
-            return r;
+            const builder = new QueryBuilder<T>(table, struct, softDeleteColumn);
+            Object.entries(conditions).forEach(([k, v]) => builder.where(k, v));
+            return builder.get();
         },
 
         /**
          * Get first record matching conditions.
          */
         async first(conditions: Record<string, unknown> = {}) {
-            const r = await readOne<T>(table, conditions);
-            if (r.success && r.data) castReadRow(r.data as Record<string, unknown>, struct);
-            return r;
+            const builder = new QueryBuilder<T>(table, struct, softDeleteColumn);
+            Object.entries(conditions).forEach(([k, v]) => builder.where(k, v));
+            return builder.first();
         },
 
         /**
@@ -127,10 +130,40 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
         },
 
         /**
-         * Delete a record by primary key.
+         * Delete a record by primary key. Soft-deletes (sets the deleted_at
+         * column) when softDelete is enabled, otherwise a hard DELETE.
          */
         async delete(id: unknown) {
+            if (softDeleteColumn) {
+                const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                return update(table, struct, { [primaryKey]: id, [softDeleteColumn]: now }, primaryKey);
+            }
             return remove(table, primaryKey, id);
+        },
+
+        /**
+         * Restore a soft-deleted record (clears deleted_at). No-op contract when
+         * soft delete is not enabled.
+         */
+        async restore(id: unknown) {
+            if (!softDeleteColumn) {
+                return { success: false, message: 'Soft delete not enabled', data: null };
+            }
+            return update(table, struct, { [primaryKey]: id, [softDeleteColumn]: null }, primaryKey);
+        },
+
+        /**
+         * Query builder including soft-deleted rows.
+         */
+        withTrashed(): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).withTrashed();
+        },
+
+        /**
+         * Query builder returning only soft-deleted rows.
+         */
+        onlyTrashed(): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).onlyTrashed();
         },
 
         /**
@@ -151,63 +184,63 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * Get count of all records.
          */
         async count() {
-            return new QueryBuilder<T>(table, struct).count();
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).count();
         },
 
         /**
          * Get sum of a column.
          */
         async sum(field: string) {
-            return new QueryBuilder<T>(table, struct).sum(field);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).sum(field);
         },
 
         /**
          * Get average of a column.
          */
         async avg(field: string) {
-            return new QueryBuilder<T>(table, struct).avg(field);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).avg(field);
         },
 
         /**
          * Get maximum value of a column.
          */
         async max(field: string) {
-            return new QueryBuilder<T>(table, struct).max(field);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).max(field);
         },
 
         /**
          * Get minimum value of a column.
          */
         async min(field: string) {
-            return new QueryBuilder<T>(table, struct).min(field);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).min(field);
         },
 
         /**
          * Restrict selected columns and return a query builder.
          */
         select(...fields: string[]): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).select(...fields);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).select(...fields);
         },
 
         /**
          * Set ORDER BY and return query builder.
          */
         orderBy(field: string, direction: string = 'ASC'): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).orderBy(field, direction);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).orderBy(field, direction);
         },
 
         /**
          * Set LIMIT and return query builder.
          */
         limit(limit: number): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).limit(limit);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).limit(limit);
         },
 
         /**
          * Set OFFSET and return query builder.
          */
         offset(offset: number): QueryBuilder<T> {
-            return new QueryBuilder<T>(table, struct).offset(offset);
+            return new QueryBuilder<T>(table, struct, softDeleteColumn).offset(offset);
         },
 
         /**
@@ -215,7 +248,7 @@ export function model<T = Record<string, unknown>>(table: string, struct: Field[
          * query().where(...).pluck()).
          */
         async pluck(field: string, conditions: Record<string, unknown> = {}) {
-            const builder = new QueryBuilder<T>(table, struct);
+            const builder = new QueryBuilder<T>(table, struct, softDeleteColumn);
 
             // Apply simple conditions if provided
             if (Object.keys(conditions).length > 0) {

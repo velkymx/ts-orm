@@ -59,8 +59,12 @@ export class QueryBuilder<T = Record<string, unknown>> {
     private _limit: number | null;
     private _offset: number | null;
     private _select: string;
+    // Soft-delete column (e.g. 'deleted_at') when the model enables it, else null.
+    // _trashed controls scoping: active = hide deleted, with = include, only = deleted only.
+    private _softDeleteColumn: string | null;
+    private _trashed: 'active' | 'with' | 'only';
 
-    constructor(table: string, struct: Field[] | null = null) {
+    constructor(table: string, struct: Field[] | null = null, softDeleteColumn: string | null = null) {
         this.table = table;
         this.struct = struct;
         this._wheres = [];
@@ -70,6 +74,20 @@ export class QueryBuilder<T = Record<string, unknown>> {
         this._limit = null;
         this._offset = null;
         this._select = '*';
+        this._softDeleteColumn = softDeleteColumn;
+        this._trashed = 'active';
+    }
+
+    /** Include soft-deleted rows in the result. */
+    withTrashed(): this {
+        this._trashed = 'with';
+        return this;
+    }
+
+    /** Return only soft-deleted rows. */
+    onlyTrashed(): this {
+        this._trashed = 'only';
+        return this;
     }
 
     /**
@@ -495,10 +513,6 @@ export class QueryBuilder<T = Record<string, unknown>> {
      * Build the WHERE clause SQL and bindings.
      */
     private _buildWhereClause(): { sql: string; bindings: unknown[] } {
-        if (this._wheres.length === 0) {
-            return { sql: '', bindings: [] };
-        }
-
         const whereParts: string[] = [];
         // unknown[]: values originate from caller payloads. They are cast to
         // mysql2's ExecuteValues only inside runQuery (the single execute path).
@@ -556,6 +570,18 @@ export class QueryBuilder<T = Record<string, unknown>> {
                 bindings.push(where.value);
             }
         });
+
+        // Soft-delete scope: hide deleted rows by default; withTrashed() includes
+        // them; onlyTrashed() returns just the deleted ones. No bindings needed.
+        if (this._softDeleteColumn && this._trashed !== 'with') {
+            const col = validateAndEscapeIdentifier(this._softDeleteColumn, 'column name');
+            const predicate = this._trashed === 'only' ? `${col} IS NOT NULL` : `${col} IS NULL`;
+            whereParts.push(`${whereParts.length ? ' AND ' : ''}${predicate}`);
+        }
+
+        if (whereParts.length === 0) {
+            return { sql: '', bindings: [] };
+        }
 
         return {
             sql: `WHERE ${whereParts.join('')}`,
@@ -738,6 +764,6 @@ export class QueryBuilder<T = Record<string, unknown>> {
      * Create a fresh query builder instance.
      */
     clone(): QueryBuilder<T> {
-        return new QueryBuilder<T>(this.table, this.struct);
+        return new QueryBuilder<T>(this.table, this.struct, this._softDeleteColumn);
     }
 }
