@@ -1,5 +1,5 @@
 import { pool } from './db.js';
-import { validateAndEscapeIdentifier } from './security.js';
+import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field, FieldType } from './validator.js';
 
 // Maps MySQL base column types to the ORM's field types.
@@ -28,59 +28,63 @@ interface ColumnRow {
 }
 
 export async function generateStructFromTable(table: string): Promise<Field[]> {
-  // Validate and escape table name
-  const safeTable = validateAndEscapeIdentifier(table, 'table name');
-  const [rows] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
-  const columns = rows as ColumnRow[];
+  try {
+    // Validate and escape table name
+    const safeTable = validateAndEscapeIdentifier(table, 'table name');
+    const [rows] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
+    const columns = rows as ColumnRow[];
 
-  const struct = columns.map((col): Field => {
-    const rawType = col.Type.toLowerCase();
-    const lengthMatch = rawType.match(/\((.*?)\)/);
-    const baseType = rawType.split('(')[0];
-    const isEnum = baseType === 'enum';
-    const isAuto = col.Extra.includes('auto_increment');
+    return columns.map((col): Field => {
+      const rawType = col.Type.toLowerCase();
+      const lengthMatch = rawType.match(/\((.*?)\)/);
+      const baseType = rawType.split('(')[0];
+      const isEnum = baseType === 'enum';
+      const isAuto = col.Extra.includes('auto_increment');
 
-    const isUuid =
-      (baseType === 'char' || baseType === 'varchar') &&
-      parseInt(lengthMatch?.[1] ?? '') === 36 &&
-      col.Field.toLowerCase().includes('id');
+      const isUuid =
+        (baseType === 'char' || baseType === 'varchar') &&
+        parseInt(lengthMatch?.[1] ?? '') === 36 &&
+        col.Field.toLowerCase().includes('id');
 
-    const type: FieldType = isUuid
-      ? 'uuid'
-      : typeMap[baseType] || 'string';
+      const type: FieldType = isUuid
+        ? 'uuid'
+        : typeMap[baseType] || 'string';
 
-    let length: number | null = null;
-    if (isEnum) {
-      length = null;
-    } else if (type === 'date') {
-      length = 10; // YYYY-MM-DD
-    } else if (type === 'datetime') {
-      length = 19; // YYYY-MM-DD HH:MM:SS
-    } else {
-      length = parseInt(lengthMatch?.[1] ?? '') || null;
-    }
+      let length: number | null = null;
+      if (isEnum) {
+        length = null;
+      } else if (type === 'date') {
+        length = 10; // YYYY-MM-DD
+      } else if (type === 'datetime') {
+        length = 19; // YYYY-MM-DD HH:MM:SS
+      } else {
+        length = parseInt(lengthMatch?.[1] ?? '') || null;
+      }
 
-    return {
-      name: col.Field,
-      type,
-      required: col.Null === 'NO',
-      length,
-      default: isAuto
-        ? 'auto_increment'
-        : col.Default?.toLowerCase() === 'current_timestamp'
-          ? 'current_timestamp'
-          : col.Default === null
-            ? (col.Null === 'NO' ? '' : null)
-            : col.Default,
-      ...(isEnum
-        ? {
-            enum: lengthMatch![1]
-              .replace(/'/g, '')
-              .split(',')
-          }
-        : {})
-    };
-  });
-
-  return struct;
+      return {
+        name: col.Field,
+        type,
+        required: col.Null === 'NO',
+        length,
+        default: isAuto
+          ? 'auto_increment'
+          : col.Default?.toLowerCase() === 'current_timestamp'
+            ? 'current_timestamp'
+            : col.Default === null
+              ? (col.Null === 'NO' ? '' : null)
+              : col.Default,
+        ...(isEnum
+          ? {
+              enum: lengthMatch![1]
+                .replace(/'/g, '')
+                .split(',')
+            }
+          : {})
+      };
+    });
+  } catch (error) {
+    // Scrub DB/schema detail before surfacing (sanitizeError also logs the full
+    // error server-side via the active logger). Keeps the throwing contract.
+    throw new Error(sanitizeError(error as Error, 'introspect', { table }));
+  }
 }

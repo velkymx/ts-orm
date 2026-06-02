@@ -1,5 +1,6 @@
 import { QueryBuilder } from '../src/QueryBuilder.js';
 import { model } from '../src/model.js';
+import { generateStructFromTable } from '../src/introspect.js';
 import { isValidDate, isValidDatetime, isValidBoolean, isValidUUID } from '../src/security.js';
 import mysql from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
@@ -262,6 +263,19 @@ describe('Model - pluck, deleteWhere, readWith', () => {
 
     const after = await qb(usersTable).where('city', 'TEMP').count();
     expect(after.data).toBe(0);
+  });
+});
+
+describe('introspect.generateStructFromTable', () => {
+  test('generates a struct for an existing table', async () => {
+    const struct = await generateStructFromTable(usersTable);
+    expect(Array.isArray(struct)).toBe(true);
+    expect(struct.find(f => f.name === 'name')?.type).toBe('string');
+    expect(struct.find(f => f.name === 'id')?.default).toBe('auto_increment');
+  });
+
+  test('throws a sanitized error for a missing table (no raw DB detail)', async () => {
+    await expect(generateStructFromTable('definitely_not_a_table_xyz')).rejects.toThrow('Table not found');
   });
 });
 
