@@ -222,6 +222,12 @@ describe('QueryBuilder - pluck and clone', () => {
     expect(res.data.sort()).toEqual(['Alice', 'Carol']);
   });
 
+  test('pluck() on an empty result set returns an empty array', async () => {
+    const res = await qb(usersTable).where('city', 'NOWHERE').pluck('name');
+    expect(res.success).toBe(true);
+    expect(res.data).toEqual([]);
+  });
+
   test('first() on an empty result set returns Record not found', async () => {
     const res = await qb(usersTable).where('city', 'NOWHERE').first();
     expect(res.success).toBe(false);
