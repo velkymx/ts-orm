@@ -10,6 +10,13 @@
     // Index/array access yields `T | undefined`, forcing explicit handling of
     // missing elements (regex groups, split parts, empty result rows).
     "noUncheckedIndexedAccess": true,
+    // Enforce explicit `import type`/`export type` and predictable ESM emit.
+    "verbatimModuleSyntax": true,
+    // Catch dead code and unsafe overrides/switch fallthrough.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
