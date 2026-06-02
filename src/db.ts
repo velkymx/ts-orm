@@ -27,6 +27,10 @@ function resolveSsl(): PoolOptions['ssl'] {
 // MySQL, MariaDB, RDS/Aurora-MySQL — via host/port/credentials (+ optional TLS).
 export function buildPoolConfig(): PoolOptions {
     const ssl = resolveSsl();
+    // Optional pool tuning. Only applied when a positive, finite value is given;
+    // otherwise mysql2's defaults stand (connectionLimit 10, no connect timeout).
+    const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT);
+    const connectTimeout = Number(process.env.DB_CONNECT_TIMEOUT);
     return {
         host: process.env.DB_HOST,
         // Configurable port; defaults to MySQL's 3306 when unset (also lets the
@@ -35,7 +39,9 @@ export function buildPoolConfig(): PoolOptions {
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         database: process.env.DB_DATABASE,
-        ...(ssl ? { ssl } : {})
+        ...(ssl ? { ssl } : {}),
+        ...(Number.isFinite(connectionLimit) && connectionLimit > 0 ? { connectionLimit } : {}),
+        ...(Number.isFinite(connectTimeout) && connectTimeout > 0 ? { connectTimeout } : {})
     };
 }
 

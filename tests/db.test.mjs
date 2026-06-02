@@ -1,15 +1,15 @@
 import { buildPoolConfig, ping } from '../src/db.js';
 
 describe('buildPoolConfig — managed MySQL / TLS', () => {
-  let savedSsl;
-  let savedPort;
+  const keys = ['DB_SSL', 'DB_PORT', 'DB_CONNECTION_LIMIT', 'DB_CONNECT_TIMEOUT'];
+  let saved;
   beforeEach(() => {
-    savedSsl = process.env.DB_SSL;
-    savedPort = process.env.DB_PORT;
+    saved = Object.fromEntries(keys.map(k => [k, process.env[k]]));
   });
   afterEach(() => {
-    if (savedSsl === undefined) delete process.env.DB_SSL; else process.env.DB_SSL = savedSsl;
-    if (savedPort === undefined) delete process.env.DB_PORT; else process.env.DB_PORT = savedPort;
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
+    }
   });
 
   test('defaults to port 3306 and no TLS', () => {
@@ -38,6 +38,30 @@ describe('buildPoolConfig — managed MySQL / TLS', () => {
   test('DB_SSL=no-verify allows self-signed certs', () => {
     process.env.DB_SSL = 'no-verify';
     expect(buildPoolConfig().ssl).toEqual({ rejectUnauthorized: false });
+  });
+
+  test('connection tuning is omitted by default (mysql2 defaults apply)', () => {
+    delete process.env.DB_CONNECTION_LIMIT;
+    delete process.env.DB_CONNECT_TIMEOUT;
+    const cfg = buildPoolConfig();
+    expect(cfg.connectionLimit).toBeUndefined();
+    expect(cfg.connectTimeout).toBeUndefined();
+  });
+
+  test('DB_CONNECTION_LIMIT / DB_CONNECT_TIMEOUT are applied when valid', () => {
+    process.env.DB_CONNECTION_LIMIT = '5';
+    process.env.DB_CONNECT_TIMEOUT = '2000';
+    const cfg = buildPoolConfig();
+    expect(cfg.connectionLimit).toBe(5);
+    expect(cfg.connectTimeout).toBe(2000);
+  });
+
+  test('invalid tuning values are ignored', () => {
+    process.env.DB_CONNECTION_LIMIT = 'abc';
+    process.env.DB_CONNECT_TIMEOUT = '0';
+    const cfg = buildPoolConfig();
+    expect(cfg.connectionLimit).toBeUndefined();
+    expect(cfg.connectTimeout).toBeUndefined();
   });
 
   test('ping() returns true when the database is reachable', async () => {
