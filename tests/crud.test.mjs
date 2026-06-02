@@ -235,6 +235,15 @@ describe('Security Tests', () => {
     expect(res.data).toBe('Table not found');
   });
 
+  test('readOne on a nonexistent table returns the Query-failed branch', async () => {
+    // read() fails -> result.data is not an array -> firstRow returns the
+    // 'Query failed' failure envelope (the non-array branch of firstRow).
+    const res = await readOne('no_such_table_xyz', { id: 'x' });
+    expect(res.success).toBe(false);
+    expect(res.message).toBe('Query failed');
+    expect(res.data).toBeNull();
+  });
+
   test('validatePayload allows null for a non-required enum field', () => {
     // Pure validation unit: a null value for a non-required enum produces no
     // error. (Replaces an older test that only passed because the `test` table
