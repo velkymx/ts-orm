@@ -500,4 +500,16 @@ describe('Server-side default columns (R2)', () => {
     expect(row.data.created).toBeTruthy();          // DB applied CURRENT_TIMESTAMP
     expect(row.data.created).not.toBe('current_timestamp');
   });
+
+  test('caller-supplied "current_timestamp" value is dropped (DB applies default)', async () => {
+    // Even when the caller explicitly passes the keyword string, it must be
+    // omitted from the INSERT (never bound as literal text into the DATETIME).
+    const res = await create(tsTable, tsStruct, { name: 'Y', created: 'current_timestamp' });
+    expect(res.success).toBe(true);
+
+    const row = await readOne(tsTable, { id: res.data.id });
+    expect(row.success).toBe(true);
+    expect(row.data.created).toBeTruthy();
+    expect(row.data.created).not.toBe('current_timestamp');
+  });
 });
