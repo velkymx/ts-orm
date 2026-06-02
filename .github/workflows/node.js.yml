@@ -51,3 +51,41 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+
+  # Proves MySQL-wire compatibility on MariaDB (and by extension RDS/Aurora-MySQL,
+  # which speak the same protocol). The Vitest globalSetup targets the provided
+  # service DB via DB_HOST/DB_PORT.
+  mariadb:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: vibeorm_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_DATABASE: vibeorm_test
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.x
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
