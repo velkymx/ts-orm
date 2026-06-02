@@ -208,6 +208,20 @@ describe('Security Tests', () => {
     expect(res.message).toBe('No fields to update');
   });
 
+  test('create against a nonexistent table returns sanitized "Table not found"', async () => {
+    // Valid identifier (passes escaping) but the table does not exist -> the raw
+    // MySQL ER_NO_SUCH_TABLE must be scrubbed to a safe client message.
+    const res = await create('nope_table_xyz', struct, {
+      id: randomUUID(),
+      name: 'x',
+      json: '{}',
+      related_forms: 'x',
+      date_created: '2025-01-01 00:00:00'
+    });
+    expect(res.success).toBe(false);
+    expect(res.data).toBe('Table not found');
+  });
+
   test('validatePayload allows null for a non-required enum field', () => {
     // Pure validation unit: a null value for a non-required enum produces no
     // error. (Replaces an older test that only passed because the `test` table
