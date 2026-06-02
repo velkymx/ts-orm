@@ -91,21 +91,17 @@ export async function read(table: string, conditions: Record<string, unknown> = 
 }
 
 export async function readOne(table: string, conditions: Record<string, unknown> = {}): Promise<OrmResponse> {
-    const result = await read(table, conditions); // just use it directly
+    const result = await read(table, conditions);
 
     if (!result.success || !Array.isArray(result.data)) {
-      return { success: false, message: 'Query failed', data: null };
+      return formatResponse(false, 'Query failed');
     }
 
     if (result.data.length === 0) {
-      return { success: false, message: 'Record not found', data: null };
+      return formatResponse(false, 'Record not found');
     }
 
-    return {
-      success: true,
-      message: 'Record found',
-      data: result.data[0]
-    };
+    return formatResponse(true, 'Record found', result.data[0]);
   }
 
   export async function findOrFail(table: string, key: string, value: unknown): Promise<OrmResponse> {

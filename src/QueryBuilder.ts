@@ -656,18 +656,14 @@ export class QueryBuilder {
         const result = await this.get();
 
         if (!result.success || !Array.isArray(result.data)) {
-            return { success: false, message: 'Query failed', data: null };
+            return formatResponse(false, 'Query failed');
         }
 
         if (result.data.length === 0) {
-            return { success: false, message: 'Record not found', data: null };
+            return formatResponse(false, 'Record not found');
         }
 
-        return {
-            success: true,
-            message: 'Record found',
-            data: result.data[0]
-        };
+        return formatResponse(true, 'Record found', result.data[0]);
     }
 
     /**
