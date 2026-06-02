@@ -50,7 +50,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run typecheck
-      - run: npm test
+      # Coverage gate: fails the build if coverage drops below the configured
+      # thresholds (vitest.config.ts).
+      - run: npm run test:coverage
 
   # Proves MySQL-wire compatibility on MariaDB (and by extension RDS/Aurora-MySQL,
   # which speak the same protocol). The Vitest globalSetup targets the provided
