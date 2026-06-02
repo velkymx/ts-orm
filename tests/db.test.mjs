@@ -1,4 +1,5 @@
 import { buildPoolConfig, ping } from '../src/db.js';
+import { setLogger, createConsoleLogger } from '../src/logger.js';
 
 describe('buildPoolConfig — managed MySQL / TLS', () => {
   const keys = ['DB_SSL', 'DB_PORT', 'DB_CONNECTION_LIMIT', 'DB_CONNECT_TIMEOUT'];
@@ -62,6 +63,27 @@ describe('buildPoolConfig — managed MySQL / TLS', () => {
     const cfg = buildPoolConfig();
     expect(cfg.connectionLimit).toBeUndefined();
     expect(cfg.connectTimeout).toBeUndefined();
+  });
+
+  test('warns when required DB config (DB_HOST/DB_DATABASE) is missing', () => {
+    const savedHost = process.env.DB_HOST;
+    delete process.env.DB_HOST;
+    const warns = [];
+    setLogger({ debug() {}, info() {}, warn(msg) { warns.push(msg); }, error() {} });
+
+    buildPoolConfig();
+    expect(warns.length).toBeGreaterThan(0);
+
+    if (savedHost === undefined) delete process.env.DB_HOST; else process.env.DB_HOST = savedHost;
+    setLogger(createConsoleLogger());
+  });
+
+  test('does not warn when config is present', () => {
+    const warns = [];
+    setLogger({ debug() {}, info() {}, warn(msg) { warns.push(msg); }, error() {} });
+    buildPoolConfig(); // DB_HOST/DB_DATABASE set by the harness
+    expect(warns.length).toBe(0);
+    setLogger(createConsoleLogger());
   });
 
   test('ping() returns true when the database is reachable', async () => {

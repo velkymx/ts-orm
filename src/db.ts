@@ -27,6 +27,15 @@ function resolveSsl(): PoolOptions['ssl'] {
 // Build the pool options from the environment. Works for any MySQL-wire engine —
 // MySQL, MariaDB, RDS/Aurora-MySQL — via host/port/credentials (+ optional TLS).
 export function buildPoolConfig(): PoolOptions {
+    // Fail-soft config check: warn (don't throw, so CLI / validate-only use without
+    // a DB still imports) when the essentials are missing rather than silently
+    // connecting to localhost / no database.
+    if (!process.env.DB_HOST || !process.env.DB_DATABASE) {
+        getLogger().warn('VibeORM: missing DB configuration', {
+            hint: 'set DB_HOST and DB_DATABASE (see .env.example)'
+        });
+    }
+
     const ssl = resolveSsl();
     // Optional pool tuning. Only applied when a positive, finite value is given;
     // otherwise mysql2's defaults stand (connectionLimit 10, no connect timeout).
