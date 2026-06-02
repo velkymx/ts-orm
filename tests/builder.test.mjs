@@ -355,6 +355,16 @@ describe('introspect.generateStructFromTable', () => {
   });
 });
 
+describe('QueryBuilder - offset without limit', () => {
+  test('offset without a limit skips rows and returns the remainder', async () => {
+    // Exercises the LIMIT 18446744073709551615 OFFSET n sentinel (MySQL needs a
+    // LIMIT before OFFSET). ages asc: 25,30,35,40 -> offset 2 -> [35, 40].
+    const res = await qb(usersTable).orderBy('age', 'ASC').offset(2).get();
+    expect(res.success).toBe(true);
+    expect(res.data.map(r => r.age)).toEqual([35, 40]);
+  });
+});
+
 describe('orm.readWith — options', () => {
   test('an invalid direction falls back to ASC', async () => {
     const res = await readWith(usersTable, {}, [], { orderBy: 'age', direction: 'invalid' });
