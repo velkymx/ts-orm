@@ -55,7 +55,7 @@ export async function create(table: string, struct: Field[], payload: Record<str
 }
 
 
-export async function read(table: string, conditions: Record<string, unknown> = {}, options: ReadOptions = {}): Promise<OrmResponse> {
+export async function read<T = Record<string, unknown>>(table: string, conditions: Record<string, unknown> = {}, options: ReadOptions = {}): Promise<OrmResponse<T[]>> {
     try {
         // Validate and escape table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -80,24 +80,26 @@ export async function read(table: string, conditions: Record<string, unknown> = 
         const sql = `SELECT * FROM ${safeTable} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
         const [rows] = await executor().execute(sql, keys.map(k => conditions[k]) as ExecuteValues[]);
-        return formatResponse(true, 'Data retrieved', rows);
+        // Rows typed as T[] by the caller's generic; failure branch is loosely
+        // typed (success path is sound).
+        return formatResponse(true, 'Data retrieved', rows) as OrmResponse<T[]>;
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'read', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'read', { table })) as OrmResponse<T[]>;
     }
 }
 
-export async function readOne(table: string, conditions: Record<string, unknown> = {}): Promise<OrmResponse> {
-    return firstRow(await read(table, conditions));
+export async function readOne<T = Record<string, unknown>>(table: string, conditions: Record<string, unknown> = {}): Promise<OrmResponse<T>> {
+    return firstRow(await read<T>(table, conditions)) as OrmResponse<T>;
 }
 
-export async function findOrFail(table: string, key: string, value: unknown): Promise<OrmResponse> {
+export async function findOrFail<T = Record<string, unknown>>(table: string, key: string, value: unknown): Promise<OrmResponse<T>> {
     // Consistent contract: every op returns the {success,message,data} envelope.
     // readOne already yields 'Record found' / 'Record not found' — return it
     // directly rather than throwing.
-    return readOne(table, { [key]: value });
+    return readOne<T>(table, { [key]: value });
 }
 
-export async function readWith(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse> {
+export async function readWith<T = Record<string, unknown>>(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse<T[]>> {
     try {
         // Validate and escape main table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -163,9 +165,9 @@ export async function readWith(table: string, conditions: Record<string, unknown
 
         const [rows] = await executor().execute(sql, values as ExecuteValues[]);
 
-        return formatResponse(true, 'Data retrieved with join', rows);
+        return formatResponse(true, 'Data retrieved with join', rows) as OrmResponse<T[]>;
     } catch (error) {
-        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'readWith', { table }));
+        return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'readWith', { table })) as OrmResponse<T[]>;
     }
 }
 

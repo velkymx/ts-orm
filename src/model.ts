@@ -13,7 +13,7 @@ import type { Field } from './validator.js';
  * await User.create({ name: 'Alice' });
  * const active = await User.where('status', 'active').get();
  */
-export function model(table: string, struct: Field[], options: { primaryKey?: string } = {}) {
+export function model<T = Record<string, unknown>>(table: string, struct: Field[], options: { primaryKey?: string } = {}) {
     const primaryKey = options.primaryKey || 'id';
 
     return {
@@ -24,15 +24,15 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
         /**
          * Create a new query builder instance.
          */
-        query(): QueryBuilder {
-            return new QueryBuilder(table, struct);
+        query(): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct);
         },
 
         /**
          * Find a record by primary key.
          */
         async find(id: unknown) {
-            return readOne(table, { [primaryKey]: id });
+            return readOne<T>(table, { [primaryKey]: id });
         },
 
         /**
@@ -40,15 +40,15 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
          * envelope (success:false with 'Record not found' when absent).
          */
         async findOrFail(id: unknown) {
-            return findOrFail(table, primaryKey, id);
+            return findOrFail<T>(table, primaryKey, id);
         },
 
         /**
          * Start a WHERE query. Accepts where(field, value),
          * where(field, operator, value), or a conditions object.
          */
-        where(fieldOrConditions: string | Record<string, unknown>, operatorOrValue?: unknown, value?: unknown): QueryBuilder {
-            const builder = new QueryBuilder(table, struct);
+        where(fieldOrConditions: string | Record<string, unknown>, operatorOrValue?: unknown, value?: unknown): QueryBuilder<T> {
+            const builder = new QueryBuilder<T>(table, struct);
 
             // If first argument is an object, treat as key-value conditions
             if (typeof fieldOrConditions === 'object' && fieldOrConditions !== null) {
@@ -71,36 +71,36 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
         /**
          * Start a WHERE IN query.
          */
-        whereIn(field: string, values: unknown[]): QueryBuilder {
-            return new QueryBuilder(table, struct).whereIn(field, values);
+        whereIn(field: string, values: unknown[]): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).whereIn(field, values);
         },
 
         /**
          * Start a WHERE NULL query.
          */
-        whereNull(field: string): QueryBuilder {
-            return new QueryBuilder(table, struct).whereNull(field);
+        whereNull(field: string): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).whereNull(field);
         },
 
         /**
          * Start a WHERE NOT NULL query.
          */
-        whereNotNull(field: string): QueryBuilder {
-            return new QueryBuilder(table, struct).whereNotNull(field);
+        whereNotNull(field: string): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).whereNotNull(field);
         },
 
         /**
          * Get all records.
          */
         async all(conditions: Record<string, unknown> = {}) {
-            return read(table, conditions);
+            return read<T>(table, conditions);
         },
 
         /**
          * Get first record matching conditions.
          */
         async first(conditions: Record<string, unknown> = {}) {
-            return readOne(table, conditions);
+            return readOne<T>(table, conditions);
         },
 
         /**
@@ -142,56 +142,56 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
          * Get count of all records.
          */
         async count() {
-            return new QueryBuilder(table, struct).count();
+            return new QueryBuilder<T>(table, struct).count();
         },
 
         /**
          * Get sum of a column.
          */
         async sum(field: string) {
-            return new QueryBuilder(table, struct).sum(field);
+            return new QueryBuilder<T>(table, struct).sum(field);
         },
 
         /**
          * Get average of a column.
          */
         async avg(field: string) {
-            return new QueryBuilder(table, struct).avg(field);
+            return new QueryBuilder<T>(table, struct).avg(field);
         },
 
         /**
          * Get maximum value of a column.
          */
         async max(field: string) {
-            return new QueryBuilder(table, struct).max(field);
+            return new QueryBuilder<T>(table, struct).max(field);
         },
 
         /**
          * Get minimum value of a column.
          */
         async min(field: string) {
-            return new QueryBuilder(table, struct).min(field);
+            return new QueryBuilder<T>(table, struct).min(field);
         },
 
         /**
          * Set ORDER BY and return query builder.
          */
-        orderBy(field: string, direction: string = 'ASC'): QueryBuilder {
-            return new QueryBuilder(table, struct).orderBy(field, direction);
+        orderBy(field: string, direction: string = 'ASC'): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).orderBy(field, direction);
         },
 
         /**
          * Set LIMIT and return query builder.
          */
-        limit(limit: number): QueryBuilder {
-            return new QueryBuilder(table, struct).limit(limit);
+        limit(limit: number): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).limit(limit);
         },
 
         /**
          * Set OFFSET and return query builder.
          */
-        offset(offset: number): QueryBuilder {
-            return new QueryBuilder(table, struct).offset(offset);
+        offset(offset: number): QueryBuilder<T> {
+            return new QueryBuilder<T>(table, struct).offset(offset);
         },
 
         /**
@@ -199,7 +199,7 @@ export function model(table: string, struct: Field[], options: { primaryKey?: st
          * query().where(...).pluck()).
          */
         async pluck(field: string, conditions: Record<string, unknown> = {}) {
-            const builder = new QueryBuilder(table, struct);
+            const builder = new QueryBuilder<T>(table, struct);
 
             // Apply simple conditions if provided
             if (Object.keys(conditions).length > 0) {

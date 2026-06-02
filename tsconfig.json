@@ -16,6 +16,6 @@
     // noEmit: this config is a typecheck gate only. tsconfig.build.json emits dist/.
     "noEmit": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "tests/types/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

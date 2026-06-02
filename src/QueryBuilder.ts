@@ -49,7 +49,7 @@ function assertOperator(operator: unknown): string {
     return op;
 }
 
-export class QueryBuilder {
+export class QueryBuilder<T = Record<string, unknown>> {
     table: string;
     struct: Field[] | null;
     private _wheres: WhereClause[];
@@ -617,7 +617,7 @@ export class QueryBuilder {
     /**
      * Execute query and return all results.
      */
-    async get(): Promise<OrmResponse> {
+    async get(): Promise<OrmResponse<T[]>> {
         try {
             const safeTable = validateAndEscapeIdentifier(this.table, 'table name');
             const joinClause = this._buildJoinClause();
@@ -632,20 +632,22 @@ export class QueryBuilder {
             const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
             const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
-            return formatResponse(true, 'Data retrieved', rows);
+            // Rows are typed as T[] by the caller's generic; the envelope is
+            // loosely typed on the failure branch (success path is sound).
+            return formatResponse(true, 'Data retrieved', rows) as OrmResponse<T[]>;
         } catch (error) {
-            return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'get', { table: this.table }));
+            return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'get', { table: this.table })) as OrmResponse<T[]>;
         }
     }
 
     /**
      * Execute query and return first result.
      */
-    async first(): Promise<OrmResponse> {
+    async first(): Promise<OrmResponse<T>> {
         // first() returns a single record, so it always caps the query at one
         // row — any previously set .limit() is intentionally overridden.
         this._limit = 1;
-        return firstRow(await this.get());
+        return firstRow(await this.get()) as OrmResponse<T>;
     }
 
     /**
@@ -727,7 +729,7 @@ export class QueryBuilder {
     /**
      * Create a fresh query builder instance.
      */
-    clone(): QueryBuilder {
-        return new QueryBuilder(this.table, this.struct);
+    clone(): QueryBuilder<T> {
+        return new QueryBuilder<T>(this.table, this.struct);
     }
 }
