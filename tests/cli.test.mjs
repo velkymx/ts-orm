@@ -51,4 +51,14 @@ describe('CLI (vibeorm struct)', () => {
     expect(Array.isArray(struct)).toBe(true);
     expect(struct.some(f => f.name === 'name')).toBe(true);
   }, 30000);
+
+  test('prints usage and exits 1 when no table is given', async () => {
+    try {
+      await run('node', ['dist/cli.js', 'struct'], { env: process.env, timeout: 20000 });
+      throw new Error('CLI should have exited non-zero');
+    } catch (e) {
+      expect(e.code).toBe(1);
+      expect(e.stdout).toContain('Usage: vibeorm struct <tableName>');
+    }
+  }, 30000);
 });
