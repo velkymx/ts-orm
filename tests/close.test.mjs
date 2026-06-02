@@ -8,7 +8,7 @@ describe('close (graceful shutdown)', () => {
     // Open a real connection first so we prove the pool is actually torn down.
     await pool.query('SELECT 1');
     await close();
-    await expect(pool.query('SELECT 1')).rejects.toThrow();
+    await expect(pool.query('SELECT 1')).rejects.toThrow(/closed/i);
     // Health check reports unreachable once the pool is closed.
     expect(await ping()).toBe(false);
   });
