@@ -10,6 +10,18 @@
 
 A lightweight ORM for Node.js and MySQL2 with an Eloquent-like Model API and a chainable query builder. Schemas are plain JSON arrays, or you can auto-generate them from your existing database with the CLI.
 
+## Why VibeORM
+
+For TypeScript devs and API builders who want an Eloquent-style ORM **without the weight**:
+
+- **No build engine, no codegen, no decorators** — 2 runtime deps (`mysql2`, `dotenv`), ~100 KB `dist`. Not Prisma's query engine, not TypeORM's metadata.
+- **Schema in seconds** — `npx vibeorm struct <table>` reads an existing DB; or write a plain JSON array. No migration ceremony to read data.
+- **Typed rows, safe by default** — `model<User>()` flows `OrmResponse<User>`; identifiers allowlisted, values parameterized, operators allowlisted.
+- **Batteries that matter** — transactions, soft deletes, casts, column projection, pluggable logging, health/shutdown — all behind a tiny API.
+- **MySQL · MariaDB · RDS/Aurora** via config alone. No dialect abstraction tax.
+
+Reach for it when you want predictable, readable DB access in a Node/TS service and Prisma/TypeORM feel like overkill.
+
 ---
 
 ## Features
@@ -39,7 +51,7 @@ npm install @velkymx/vibeorm
 
 ## Configuration
 
-Create a `.env` in your project root. The package calls `dotenv.config()` once on import.
+Copy [`.env.example`](./.env.example) to `.env` and fill it in. The package calls `dotenv.config()` once on import. `DB_HOST` and `DB_DATABASE` are **required** — VibeORM logs a warning at startup if either is missing (it won't silently connect to localhost).
 
 ```env
 DB_HOST=localhost
@@ -58,6 +70,18 @@ DB_DATABASE=myapp
 # DB_CONNECT_TIMEOUT=10000 # connect timeout in ms
 # DB_SLOW_QUERY_MS=200     # warn-log queries slower than this (0/unset = off)
 ```
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `DB_HOST` | ✅ | — | Database host (warns if unset) |
+| `DB_DATABASE` | ✅ | — | Database name (warns if unset) |
+| `DB_USER` | — | mysql2 default | Username |
+| `DB_PASSWORD` | — | — | Password |
+| `DB_PORT` | — | `3306` | Port |
+| `DB_SSL` | — | off | `Amazon RDS` (bundled CA) · `true` (verified) · `no-verify` (self-signed) |
+| `DB_CONNECTION_LIMIT` | — | `10` | Max pooled connections |
+| `DB_CONNECT_TIMEOUT` | — | mysql2 default | Connect timeout (ms) |
+| `DB_SLOW_QUERY_MS` | — | off | Warn-log queries slower than this (ms) |
 
 ---
 
@@ -344,6 +368,8 @@ await withTransaction(async () => {
   // throw here -> both updates roll back
 });
 ```
+
+> **Await sequentially inside a transaction.** A transaction runs on a single connection, which can't execute statements in parallel — `await` each operation; don't `Promise.all([...])` ORM calls inside the callback.
 
 ---
 
