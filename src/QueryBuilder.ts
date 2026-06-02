@@ -10,17 +10,16 @@ export interface OrmResponse<T = unknown> {
     data: T;
 }
 
-// Internal representation of an accumulated WHERE condition. `field` is used by
-// single-column conditions; `fields` by the any/all/none multi-column variants.
-type WhereType = 'basic' | 'in' | 'null' | 'any' | 'all' | 'none';
-interface WhereClause {
-    field?: string;
-    fields?: string[];
-    operator: string;
-    value?: unknown;
-    boolean: 'AND' | 'OR';
-    type: WhereType;
-}
+// Accumulated WHERE conditions, as a discriminated union on `type` so each
+// variant exposes exactly the fields it uses (no non-null assertions/casts).
+type WhereBoolean = 'AND' | 'OR';
+interface BasicWhere { type: 'basic'; field: string; operator: string; value: unknown; boolean: WhereBoolean; }
+interface InWhere { type: 'in'; field: string; operator: string; value: unknown[]; boolean: WhereBoolean; }
+interface NullWhere { type: 'null'; field: string; operator: string; boolean: WhereBoolean; }
+interface AnyWhere { type: 'any'; fields: string[]; operator: string; value: unknown; boolean: WhereBoolean; }
+interface AllWhere { type: 'all'; fields: string[]; operator: string; value: unknown; boolean: WhereBoolean; }
+interface NoneWhere { type: 'none'; fields: string[]; operator: string; value: unknown; boolean: WhereBoolean; }
+type WhereClause = BasicWhere | InWhere | NullWhere | AnyWhere | AllWhere | NoneWhere;
 
 interface JoinClause {
     type: 'INNER' | 'LEFT' | 'RIGHT';
@@ -331,7 +330,6 @@ export class QueryBuilder<T = Record<string, unknown>> {
         this._wheres.push({
             field,
             operator: 'IS NULL',
-            value: null,
             boolean: 'AND',
             type: 'null'
         });
@@ -346,7 +344,6 @@ export class QueryBuilder<T = Record<string, unknown>> {
         this._wheres.push({
             field,
             operator: 'IS NOT NULL',
-            value: null,
             boolean: 'AND',
             type: 'null'
         });
@@ -361,7 +358,6 @@ export class QueryBuilder<T = Record<string, unknown>> {
         this._wheres.push({
             field,
             operator: 'IS NULL',
-            value: null,
             boolean: 'OR',
             type: 'null'
         });
@@ -376,7 +372,6 @@ export class QueryBuilder<T = Record<string, unknown>> {
         this._wheres.push({
             field,
             operator: 'IS NOT NULL',
-            value: null,
             boolean: 'OR',
             type: 'null'
         });
@@ -501,13 +496,13 @@ export class QueryBuilder<T = Record<string, unknown>> {
             const boolean = index === 0 ? '' : ` ${where.boolean} `;
 
             if (where.type === 'null') {
-                const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
+                const safeField = validateAndEscapeIdentifier(where.field, 'column name');
                 whereParts.push(`${boolean}${safeField} ${where.operator}`);
             } else if (where.type === 'in') {
                 // Validate the column even on the empty path so an injected field
                 // name is still rejected.
-                const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
-                const inValues = where.value as unknown[];
+                const safeField = validateAndEscapeIdentifier(where.field, 'column name');
+                const inValues = where.value;
                 if (inValues.length === 0) {
                     // `col IN ()` / `col NOT IN ()` is a MySQL syntax error. An
                     // empty IN matches nothing (0=1); an empty NOT IN matches
@@ -520,7 +515,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
                 }
             } else if (where.type === 'any') {
                 // WHERE (col1 = ? OR col2 = ? OR col3 = ?)
-                const conditions = where.fields!.map(field => {
+                const conditions = where.fields.map(field => {
                     const safeField = validateAndEscapeIdentifier(field, 'column name');
                     bindings.push(where.value);
                     return `${safeField} ${where.operator} ?`;
@@ -528,7 +523,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
                 whereParts.push(`${boolean}(${conditions})`);
             } else if (where.type === 'all') {
                 // WHERE (col1 = ? AND col2 = ? AND col3 = ?)
-                const conditions = where.fields!.map(field => {
+                const conditions = where.fields.map(field => {
                     const safeField = validateAndEscapeIdentifier(field, 'column name');
                     bindings.push(where.value);
                     return `${safeField} ${where.operator} ?`;
@@ -536,7 +531,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
                 whereParts.push(`${boolean}(${conditions})`);
             } else if (where.type === 'none') {
                 // WHERE (col1 != ? AND col2 != ? AND col3 != ?)
-                const conditions = where.fields!.map(field => {
+                const conditions = where.fields.map(field => {
                     const safeField = validateAndEscapeIdentifier(field, 'column name');
                     bindings.push(where.value);
                     return `${safeField} ${where.operator} ?`;
@@ -544,7 +539,7 @@ export class QueryBuilder<T = Record<string, unknown>> {
                 whereParts.push(`${boolean}(${conditions})`);
             } else {
                 // Basic comparison
-                const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
+                const safeField = validateAndEscapeIdentifier(where.field, 'column name');
                 whereParts.push(`${boolean}${safeField} ${where.operator} ?`);
                 bindings.push(where.value);
             }
