@@ -1,5 +1,5 @@
 import type { RowDataPacket, ExecuteValues } from 'mysql2';
-import { pool, formatResponse, firstRow, limitOffsetClause } from './db.js';
+import { executor, formatResponse, firstRow, limitOffsetClause } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field } from './validator.js';
 
@@ -603,7 +603,7 @@ export class QueryBuilder {
 
             const sql = `SELECT ${safeField} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
-            const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
 
             // Extract just the values from the result rows
             const values = (rows as RowDataPacket[]).map(row => row[field]);
@@ -631,7 +631,7 @@ export class QueryBuilder {
 
             const sql = `SELECT ${this._select} FROM ${safeTable} ${joinClause} ${whereClause} ${orderClause} ${limitOffset}`.trim();
 
-            const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
             return formatResponse(true, 'Data retrieved', rows);
         } catch (error) {
             return formatResponse(false, 'Database operation failed', sanitizeError(error as Error, 'get', { table: this.table }));
@@ -657,7 +657,7 @@ export class QueryBuilder {
 
             const sql = `SELECT COUNT(*) as count FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
-            const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
             // COUNT(*) always yields exactly one row; default to 0 to satisfy the
             // type checker if the driver ever returns an empty set.
             return formatResponse(true, 'Count retrieved', (rows as RowDataPacket[])[0]?.count ?? 0);
@@ -706,7 +706,7 @@ export class QueryBuilder {
 
             const sql = `SELECT ${func}(${safeField}) as result FROM ${safeTable} ${joinClause} ${whereClause}`.trim();
 
-            const [rows] = await pool.execute(sql, bindings as ExecuteValues[]);
+            const [rows] = await executor().execute(sql, bindings as ExecuteValues[]);
 
             // mysql2 returns DECIMAL aggregates (SUM/AVG) as strings to avoid
             // float precision loss. Coerce numeric-looking results to Number so

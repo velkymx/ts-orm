@@ -6,6 +6,9 @@ export { validatePayload } from './validator.js';
 export { model } from './model.js';
 export { QueryBuilder } from './QueryBuilder.js';
 
+// Transactions: run ops atomically (auto-routes via AsyncLocalStorage).
+export { withTransaction } from './db.js';
+
 // Pluggable logging — inject your own logger (pino/winston) via setLogger().
 export { createConsoleLogger, setLogger, getLogger } from './logger.js';
 

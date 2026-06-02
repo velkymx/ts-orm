@@ -1,4 +1,4 @@
-import { pool } from './db.js';
+import { executor } from './db.js';
 import { validateAndEscapeIdentifier, sanitizeError } from './security.js';
 import type { Field, FieldType } from './validator.js';
 
@@ -31,7 +31,7 @@ export async function generateStructFromTable(table: string): Promise<Field[]> {
   try {
     // Validate and escape table name
     const safeTable = validateAndEscapeIdentifier(table, 'table name');
-    const [rows] = await pool.execute(`SHOW COLUMNS FROM ${safeTable}`);
+    const [rows] = await executor().execute(`SHOW COLUMNS FROM ${safeTable}`);
     const columns = rows as ColumnRow[];
 
     return columns.map((col): Field => {

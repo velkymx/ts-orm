@@ -1,5 +1,7 @@
 import mysql from 'mysql2/promise';
 import type { PoolOptions } from 'mysql2';
+import type { Pool, PoolConnection } from 'mysql2/promise';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import dotenv from 'dotenv';
 import type { OrmResponse } from './QueryBuilder.js';
 
@@ -42,6 +44,44 @@ export function buildPoolConfig(): PoolOptions {
 // pool.execute()'s prepared-statement LRU cache is shared, so identical SQL is
 // prepared once instead of once per pool.
 export const pool = mysql.createPool(buildPoolConfig());
+
+// Holds the active transaction connection for the current async context.
+// Empty outside a transaction.
+const txStore = new AsyncLocalStorage<PoolConnection>();
+
+// The executor every data op runs against: the transaction connection when
+// inside withTransaction(), otherwise the shared pool. Pool and PoolConnection
+// expose the same execute() signature, so callers need no change.
+export function executor(): Pool | PoolConnection {
+    return txStore.getStore() ?? pool;
+}
+
+/**
+ * Run `fn` inside a single transaction. Every model/QueryBuilder/orm op invoked
+ * within `fn` automatically uses the transaction connection (via executor()).
+ * Commits if `fn` resolves, rolls back if it throws (re-throwing the error).
+ * Nested calls join the outer transaction — no nested BEGIN/COMMIT.
+ */
+export async function withTransaction<T>(fn: () => Promise<T>): Promise<T> {
+    // Already in a transaction: reuse the same connection, let the outer call
+    // own commit/rollback.
+    if (txStore.getStore()) {
+        return fn();
+    }
+
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const result = await txStore.run(conn, fn);
+        await conn.commit();
+        return result;
+    } catch (error) {
+        await conn.rollback();
+        throw error;
+    } finally {
+        conn.release();
+    }
+}
 
 // Standard envelope returned by every data operation.
 export function formatResponse(success: boolean, message: string, data: unknown = null): OrmResponse {
