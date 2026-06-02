@@ -64,7 +64,12 @@ describe('Logger', () => {
     let logged;
     setLogger({ debug() {}, info() {}, warn() {}, error(_m, meta) { logged = meta; } });
     sanitizeError(new Error('fail'), 'update', { table: 'accounts' });
-    // meta carries error metadata + context only — never values/bindings.
+    // Security invariant: no payload value/binding/param key may ever be logged
+    // (this assertion still catches a leak even if new metadata fields are added).
+    const leaks = Object.keys(logged).filter(k => /value|binding|payload|param/i.test(k));
+    expect(leaks).toEqual([]);
+    // Exact white-box contract of the current log shape — update deliberately if
+    // the logged metadata fields change.
     expect(Object.keys(logged).sort()).toEqual(['code', 'context', 'errno', 'error', 'sqlState']);
   });
 });
