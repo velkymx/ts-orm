@@ -504,11 +504,20 @@ export class QueryBuilder {
                 const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
                 whereParts.push(`${boolean}${safeField} ${where.operator}`);
             } else if (where.type === 'in') {
+                // Validate the column even on the empty path so an injected field
+                // name is still rejected.
                 const safeField = validateAndEscapeIdentifier(where.field!, 'column name');
                 const inValues = where.value as unknown[];
-                const placeholders = inValues.map(() => '?').join(', ');
-                whereParts.push(`${boolean}${safeField} ${where.operator} (${placeholders})`);
-                bindings.push(...inValues);
+                if (inValues.length === 0) {
+                    // `col IN ()` / `col NOT IN ()` is a MySQL syntax error. An
+                    // empty IN matches nothing (0=1); an empty NOT IN matches
+                    // everything (1=1). No bindings needed.
+                    whereParts.push(`${boolean}${where.operator === 'NOT IN' ? '1=1' : '0=1'}`);
+                } else {
+                    const placeholders = inValues.map(() => '?').join(', ');
+                    whereParts.push(`${boolean}${safeField} ${where.operator} (${placeholders})`);
+                    bindings.push(...inValues);
+                }
             } else if (where.type === 'any') {
                 // WHERE (col1 = ? OR col2 = ? OR col3 = ?)
                 const conditions = where.fields!.map(field => {

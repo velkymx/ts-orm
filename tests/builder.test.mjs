@@ -155,6 +155,18 @@ describe('QueryBuilder - WHERE variants', () => {
     expect(res.success).toBe(true);
     expect(res.data.every(r => r.city === 'SF' || r.nickname !== null)).toBe(true);
   });
+
+  test('whereIn with an empty array matches nothing (no IN () syntax error)', async () => {
+    const res = await qb(usersTable).whereIn('city', []).get();
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBe(0);
+  });
+
+  test('whereNotIn with an empty array matches everything', async () => {
+    const res = await qb(usersTable).whereNotIn('city', []).get();
+    expect(res.success).toBe(true);
+    expect(res.data.length).toBe(4);
+  });
 });
 
 describe('QueryBuilder - JOIN builders', () => {
