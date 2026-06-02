@@ -1,4 +1,4 @@
-import { createConsoleLogger, setLogger } from '../src/logger.js';
+import { createConsoleLogger, setLogger, getLogger } from '../src/logger.js';
 import { sanitizeError } from '../src/security.js';
 
 describe('Logger', () => {
@@ -28,6 +28,18 @@ describe('Logger', () => {
     expect(log).toHaveBeenCalledTimes(1);
     expect(log.mock.calls[0][0]).toContain('[vibeorm]');
     expect(log.mock.calls[0][0]).toContain('hello');
+  });
+
+  test('default getLogger() is a console logger at warn level', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // afterEach resets the active logger to the default createConsoleLogger().
+    const lg = getLogger();
+    lg.debug('d'); // below 'warn' -> suppressed
+    lg.warn('w');  // -> console.error
+    expect(log).not.toHaveBeenCalled();
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(err.mock.calls[0][0]).toContain('[vibeorm]');
   });
 
   test('setLogger injects a custom logger used by sanitizeError', () => {
