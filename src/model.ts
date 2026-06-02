@@ -183,7 +183,7 @@ export function model<T = Record<string, unknown>>(
          * Read with joins.
          */
         async readWith(conditions: Record<string, unknown>, joins: JoinSpec[], options: ReadOptions = {}) {
-            return readWith(table, conditions, joins, options);
+            return readWith(table, conditions, joins, options, softDeleteColumn);
         },
 
         /**

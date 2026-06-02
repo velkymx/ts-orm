@@ -100,7 +100,7 @@ export async function findOrFail<T = Record<string, unknown>>(table: string, key
     return readOne<T>(table, { [key]: value });
 }
 
-export async function readWith<T = Record<string, unknown>>(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}): Promise<OrmResponse<T[]>> {
+export async function readWith<T = Record<string, unknown>>(table: string, conditions: Record<string, unknown> = {}, joins: JoinSpec[] = [], options: ReadOptions = {}, softDeleteColumn: string | null = null): Promise<OrmResponse<T[]>> {
     try {
         // Validate and escape main table name
         const safeTable = validateAndEscapeIdentifier(table, 'table name');
@@ -108,9 +108,13 @@ export async function readWith<T = Record<string, unknown>>(table: string, condi
         const whereKeys = Object.keys(conditions);
 
         // Validate and escape WHERE column names
-        const whereClause = whereKeys.length
-            ? `WHERE ${whereKeys.map(k => `${safeTable}.${validateAndEscapeIdentifier(k, 'column name')} = ?`).join(' AND ')}`
-            : '';
+        const predicates = whereKeys.map(k => `${safeTable}.${validateAndEscapeIdentifier(k, 'column name')} = ?`);
+        // Soft-delete scope on the base table (qualified, join-safe). readWith is
+        // always active-scoped when enabled — no withTrashed variant for joins.
+        if (softDeleteColumn) {
+            predicates.push(`${safeTable}.${validateAndEscapeIdentifier(softDeleteColumn, 'column name')} IS NULL`);
+        }
+        const whereClause = predicates.length ? `WHERE ${predicates.join(' AND ')}` : '';
 
         // Validate and escape JOIN clauses
         const joinClause = joins.map(join => {

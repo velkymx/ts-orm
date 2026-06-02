@@ -74,6 +74,31 @@ describe('soft deletes', () => {
     await c2.end();
   });
 
+  test('readWith excludes soft-deleted base rows', async () => {
+    const c = await conn();
+    await c.execute('DROP TABLE IF EXISTS sd_posts');
+    await c.execute('CREATE TABLE sd_posts (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT)');
+    await c.end();
+
+    const M = model(table, struct, { softDelete: true });
+    const u = await M.create({ name: 'joinme' });
+    const c2 = await conn();
+    await c2.execute('INSERT INTO sd_posts (user_id) VALUES (?)', [u.data.id]);
+    await c2.end();
+
+    const join = [{ table: 'sd_posts', on: [`${table}.id`, 'sd_posts.user_id'], type: 'inner' }];
+    const before = await M.readWith({}, join);
+    expect(before.data.length).toBeGreaterThanOrEqual(1);
+
+    await M.delete(u.data.id);
+    const after = await M.readWith({}, join);
+    expect(after.data.length).toBe(0); // soft-deleted base row excluded from the join
+
+    const c3 = await conn();
+    await c3.execute('DROP TABLE IF EXISTS sd_posts');
+    await c3.end();
+  });
+
   test('softDelete requires the deleted_at column in the struct', () => {
     const noCol = [
       { name: 'id', type: 'number', required: false, length: null, default: 'auto_increment' },
