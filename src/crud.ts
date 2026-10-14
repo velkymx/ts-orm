@@ -71,12 +71,14 @@ export function buildInsert<Table extends string, F extends Fields>(
   return { sql, params };
 }
 
-/** Options for a read: ordering and row-window bounds. */
+/** Options for a read: ordering, row-window bounds, and null filters. */
 export interface ReadOptions {
   readonly orderBy?: string;
   readonly direction?: 'asc' | 'desc';
   readonly limit?: number;
   readonly offset?: number;
+  /** Columns that must be SQL NULL, ANDed with the equality conditions. */
+  readonly isNull?: readonly string[];
 }
 
 /** Coerce to a non-negative integer, or undefined when not usable. */
@@ -96,11 +98,10 @@ export function buildSelect<Table extends string, F extends Fields>(
   const keys = Object.keys(conditions);
   const params = keys.map((key) => conditions[key] as BindValue);
 
-  const where = keys.length
-    ? ` WHERE ${keys
-        .map((key, i) => `${safeIdentifier(key, dialect, 'column name')} = ${dialect.placeholder(i + 1)}`)
-        .join(' AND ')}`
-    : '';
+  const equals = keys.map((key, i) => `${safeIdentifier(key, dialect, 'column name')} = ${dialect.placeholder(i + 1)}`);
+  const nulls = (options.isNull ?? []).map((name) => `${safeIdentifier(name, dialect, 'column name')} IS NULL`);
+  const filters = [...equals, ...nulls];
+  const where = filters.length ? ` WHERE ${filters.join(' AND ')}` : '';
 
   let orderClause = options.orderBy
     ? `ORDER BY ${safeIdentifier(options.orderBy, dialect, 'order by column')} ${
@@ -236,8 +237,9 @@ export async function readOne<Table extends string, F extends Fields>(
   driver: Driver,
   struct: Struct<Table, F>,
   conditions: Partial<RowOf<F>> = {},
+  options: ReadOptions = {},
 ): Promise<Result<RowOf<F> | null>> {
-  const result = await read(driver, struct, conditions, { limit: 1 });
+  const result = await read(driver, struct, conditions, { ...options, limit: 1 });
   if (!result.success) return result;
   const row = result.data[0];
   return row === undefined ? ok(null, 'Record not found') : ok(row, 'Record found');
@@ -249,8 +251,9 @@ export async function findOrFail<Table extends string, F extends Fields>(
   struct: Struct<Table, F>,
   key: keyof F & string,
   value: BindValue,
+  options: ReadOptions = {},
 ): Promise<RowOf<F>> {
-  const result = await readOne(driver, struct, { [key]: value } as Partial<RowOf<F>>);
+  const result = await readOne(driver, struct, { [key]: value } as Partial<RowOf<F>>, options);
   if (!result.success || result.data === null) {
     throw new NotFoundError();
   }
@@ -314,6 +317,41 @@ export function buildDelete<Table extends string, F extends Fields>(
   const table = safeIdentifier(struct.table, dialect, 'table name');
   const idColumn = safeIdentifier(idKey, dialect, 'id column name');
   return `DELETE FROM ${table} WHERE ${idColumn} = ${dialect.placeholder(1)}`;
+}
+
+/**
+ * Build a soft delete UPDATE: stamp one column over equality plus IN-list
+ * filters, always skipping already stamped rows. Powers bulk soft paths
+ * (model deleteWhere, related children) in one statement with no events.
+ */
+export function buildSoftUpdate<Table extends string, F extends Fields>(
+  dialect: Dialect,
+  struct: Struct<Table, F>,
+  column: string,
+  value: BindValue,
+  equals: Record<string, unknown> = {},
+  inFilter?: { column: string; values: readonly BindValue[] },
+): BuiltStatement {
+  const table = safeIdentifier(struct.table, dialect, 'table name');
+  const params: BindValue[] = [value];
+  let n = 1;
+  const set = `${safeIdentifier(column, dialect, 'column name')} = ${dialect.placeholder(n)}`;
+  const filters: string[] = [];
+  for (const key of Object.keys(equals)) {
+    n += 1;
+    params.push(equals[key] as BindValue);
+    filters.push(`${safeIdentifier(key, dialect, 'column name')} = ${dialect.placeholder(n)}`);
+  }
+  if (inFilter && inFilter.values.length > 0) {
+    const marks = inFilter.values.map((item) => {
+      n += 1;
+      params.push(item);
+      return dialect.placeholder(n);
+    });
+    filters.push(`${safeIdentifier(inFilter.column, dialect, 'column name')} IN (${marks.join(', ')})`);
+  }
+  filters.push(`${safeIdentifier(column, dialect, 'column name')} IS NULL`);
+  return { sql: `UPDATE ${table} SET ${set} WHERE ${filters.join(' AND ')}`, params };
 }
 
 /** Update a record by id, writing only the columns present in the payload. */

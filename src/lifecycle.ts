@@ -21,7 +21,11 @@ export type HookName =
   | 'updating'
   | 'updated'
   | 'deleted'
-  | 'deleting';
+  | 'deleting'
+  | 'restoring'
+  | 'restored'
+  | 'forceDeleting'
+  | 'forceDeleted';
 
 /** What a hook observes: current attributes plus the pending change set. */
 export interface HookContext<F extends Fields> {

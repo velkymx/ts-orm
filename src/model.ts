@@ -8,6 +8,7 @@
  */
 
 import {
+  buildSoftUpdate,
   buildUpdate,
   create as createRow,
   findOrFail as findOrFailRow,
@@ -19,6 +20,7 @@ import {
 import type { BindValue, Driver } from './driver.js';
 import { deliver, runHooks, timestampHooks, type HookContext, type ModelHooks } from './lifecycle.js';
 import { castIn, castOut, valuesEqual, type Casts } from './casts.js';
+import { isTrashed, softColumnOf, softStamp } from './soft.js';
 import { QueryBuilder, query } from './query.js';
 import type { Fields, InsertOf, RowOf, Struct } from './struct.js';
 
@@ -36,6 +38,17 @@ export interface ModelInstance<F extends Fields> {
   save(driver?: Driver): Promise<this>;
   /** Delete the row for this instance's key. */
   delete(driver?: Driver): Promise<void>;
+  /**
+   * Clear the soft delete stamp, hiding nothing and firing
+   * restoring/restored. No-op when not trashed. Requires soft deletes.
+   */
+  restore(driver?: Driver): Promise<this>;
+  /**
+   * Physically remove the row with forceDeleting/forceDeleted hooks.
+   * Idempotent: repeating after the row is gone still succeeds.
+   * Requires soft deletes.
+   */
+  forceDelete(driver?: Driver): Promise<void>;
 }
 
 /** Class surface returned by defineModel: finders plus construction. */
@@ -61,9 +74,30 @@ export interface ModelStatic<Table extends string, F extends Fields> {
   readonly timestamps?: boolean;
   /** App-shape casts by column. Unlisted columns pass through untouched. */
   readonly casts?: Casts;
+  /**
+   * Soft deletes: delete stamps deleted_at and reads hide stamped rows.
+   * Requires a deleted_at column; the flag without the column throws.
+   */
+  readonly softDeletes?: boolean;
+  /** Unscoped reads over trashed rows too: find, findOrFail, all, query. */
+  withTrashed<T>(
+    this: new (data?: Partial<RowOf<F>>) => T,
+  ): ScopedReads<Table, F, T>;
   /** Delete rows matching equality conditions in one statement. */
   deleteWhere(conditions: Partial<RowOf<F>>, driver?: Driver): Promise<{ affectedRows: number }>;
   /** Fluent builder over this model table, rows come back unhydrated. */
+  query(driver?: Driver): QueryBuilder<Table, F>;
+}
+
+/** Unscoped read surface: same shapes as the model, trashed rows included. */
+export interface ScopedReads<Table extends string, F extends Fields, T> {
+  /** Find by primary key, or null when absent. */
+  find(id: BindValue, driver?: Driver): Promise<T | null>;
+  /** Find by primary key, throwing NotFoundError when absent. */
+  findOrFail(id: BindValue, driver?: Driver): Promise<T>;
+  /** All rows as instances. */
+  all(driver?: Driver): Promise<T[]>;
+  /** Fluent builder with no soft scope, rows come back unhydrated. */
   query(driver?: Driver): QueryBuilder<Table, F>;
 }
 
@@ -112,6 +146,7 @@ export function defineModel<Table extends string, F extends Fields>(
     static hooks: ModelHooks<F> | undefined = undefined;
     static timestamps: boolean = true;
     static casts: Casts = {};
+    static softDeletes: boolean = false;
 
     protected attributes: Row;
     protected original: Row;
@@ -134,7 +169,9 @@ export function defineModel<Table extends string, F extends Fields>(
       id: BindValue,
       drv?: Driver,
     ): Promise<T | null> {
-      const result = await readOne(pick(drv), struct, { [pk]: id } as Partial<Row>);
+      const soft = softColumnOf(this, struct);
+      const options = soft === null ? {} : { isNull: [soft] };
+      const result = await readOne(pick(drv), struct, { [pk]: id } as Partial<Row>, options);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
@@ -146,14 +183,18 @@ export function defineModel<Table extends string, F extends Fields>(
       id: BindValue,
       drv?: Driver,
     ): Promise<T> {
-      return this.hydrate(await findOrFailRow(pick(drv), struct, key, id));
+      const soft = softColumnOf(this, struct);
+      const options = soft === null ? {} : { isNull: [soft] };
+      return this.hydrate(await findOrFailRow(pick(drv), struct, key, id, options));
     }
 
     static async all<T extends Model>(
       this: (new (data?: Partial<Row>) => T) & { hydrate(row: Row): T },
       drv?: Driver,
     ): Promise<T[]> {
-      const result = await read(pick(drv), struct, {}, {});
+      const soft = softColumnOf(this, struct);
+      const options = soft === null ? {} : { isNull: [soft] };
+      const result = await read(pick(drv), struct, {}, options);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
@@ -189,23 +230,66 @@ export function defineModel<Table extends string, F extends Fields>(
     }
 
     static query(drv?: Driver): QueryBuilder<Table, F> {
-      return query(pick(drv), struct);
+      const builder = query(pick(drv), struct);
+      const soft = softColumnOf(this, struct);
+      return soft === null ? builder : builder.softScope(soft);
+    }
+
+    /**
+     * Unscoped reads including trashed rows. Restore and forceDelete stay
+     * instance methods: find here, then act on what comes back.
+     */
+    static withTrashed<T extends Model>(
+      this: new (data?: Partial<Row>) => T,
+    ): ScopedReads<Table, F, T> {
+      const ctor = this as (new (data?: Partial<Row>) => T) & { hydrate(row: Row): T };
+      return {
+        async find(id: BindValue, drv?: Driver): Promise<T | null> {
+          const result = await readOne(pick(drv), struct, { [pk]: id } as Partial<Row>);
+          if (!result.success) {
+            throw new Error(failMessage(result.message, result.errors));
+          }
+          return result.data === null ? null : ctor.hydrate(result.data);
+        },
+        async findOrFail(id: BindValue, drv?: Driver): Promise<T> {
+          return ctor.hydrate(await findOrFailRow(pick(drv), struct, key, id));
+        },
+        async all(drv?: Driver): Promise<T[]> {
+          const result = await read(pick(drv), struct, {}, {});
+          if (!result.success) {
+            throw new Error(failMessage(result.message, result.errors));
+          }
+          return result.data.map((row) => ctor.hydrate(row));
+        },
+        query(drv?: Driver): QueryBuilder<Table, F> {
+          return query(pick(drv), struct);
+        },
+      };
     }
 
     static async deleteWhere(
       conditions: Partial<Row>,
       drv?: Driver,
     ): Promise<{ affectedRows: number }> {
-      let builder = query(pick(drv), struct);
+      const target = pick(drv);
+      const soft = softColumnOf(this, struct);
       const stored = castIn({ ...(conditions as Record<string, unknown>) }, castsOf(this));
-      for (const name of Object.keys(stored)) {
-        builder = builder.where(name as keyof F & string, (stored as Record<string, unknown>)[name] as BindValue);
+      if (soft === null) {
+        let builder = query(target, struct);
+        for (const name of Object.keys(stored)) {
+          builder = builder.where(name as keyof F & string, (stored as Record<string, unknown>)[name] as BindValue);
+        }
+        const result = await builder.delete();
+        if (!result.success) {
+          throw new Error(failMessage(result.message, result.errors));
+        }
+        return result.data;
       }
-      const result = await builder.delete();
-      if (!result.success) {
-        throw new Error(failMessage(result.message, result.errors));
-      }
-      return result.data;
+      // Bulk soft path: stamp matches, skip trashed, fire no hooks.
+      const stamped = castIn({ [soft]: softStamp() }, castsOf(this))[soft] as BindValue;
+      const { sql, params } = buildSoftUpdate(target.dialect, struct, soft, stamped, stored);
+      const result = await target.execute(sql, params);
+      return { affectedRows: result.affectedRows };
     }
 
     fill(data: Partial<Row>): this {
@@ -295,12 +379,70 @@ export function defineModel<Table extends string, F extends Fields>(
       if (id === undefined || id === null) {
         throw new Error('Cannot delete a model without a primary key value');
       }
+      const soft = softColumnOf(this.constructor, struct);
+      if (soft !== null) {
+        // Repeat deletes are silent no-ops, so double taps never restamp.
+        if (isTrashed(this.attributes as Record<string, unknown>)) {
+          return;
+        }
+        await runHooks(hooks, 'deleting', context(this.attributes, {}));
+        const casts = castsOf(this.constructor);
+        const stamped = castIn({ [soft]: softStamp() }, casts)[soft];
+        const { sql, params } = buildUpdate(target.dialect, struct, { [soft]: stamped, [pk]: id }, pk);
+        await target.execute(sql, params);
+        this.attributes = castOut({ ...(this.attributes as Record<string, unknown>), [soft]: stamped }, casts) as Row;
+        this.original = { ...this.attributes };
+        await deliver(target, hooks, ['deleted'], context(this.attributes, {}));
+        return;
+      }
       await runHooks(hooks, 'deleting', context(this.attributes, {}));
       const result = await remove(target, struct, key, id);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
       await deliver(target, hooks, ['deleted'], context(this.attributes, {}));
+    }
+
+    async restore(drv?: Driver): Promise<this> {
+      const target = pick(drv);
+      const hooks = hooksOf(this.constructor);
+      const soft = softColumnOf(this.constructor, struct);
+      if (soft === null) {
+        throw new Error('restore requires soft deletes: set static softDeletes');
+      }
+      const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
+      if (id === undefined || id === null) {
+        throw new Error('Cannot restore a model without a primary key value');
+      }
+      if (!isTrashed(this.attributes as Record<string, unknown>)) {
+        return this;
+      }
+      await runHooks(hooks, 'restoring', context(this.attributes, { [soft]: null } as Partial<Row>));
+      const { sql, params } = buildUpdate(target.dialect, struct, { [soft]: null, [pk]: id }, pk);
+      await target.execute(sql, params);
+      (this.attributes as Record<string, unknown>)[soft] = null;
+      this.original = { ...this.attributes };
+      await deliver(target, hooks, ['restored'], context(this.attributes, {}));
+      return this;
+    }
+
+    async forceDelete(drv?: Driver): Promise<void> {
+      const target = pick(drv);
+      const hooks = hooksOf(this.constructor);
+      const soft = softColumnOf(this.constructor, struct);
+      if (soft === null) {
+        throw new Error('forceDelete requires soft deletes: set static softDeletes');
+      }
+      const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
+      if (id === undefined || id === null) {
+        throw new Error('Cannot delete a model without a primary key value');
+      }
+      await runHooks(hooks, 'forceDeleting', context(this.attributes, {}));
+      const result = await remove(target, struct, key, id);
+      if (!result.success) {
+        throw new Error(failMessage(result.message, result.errors));
+      }
+      await deliver(target, hooks, ['forceDeleted'], context(this.attributes, {}));
     }
   }
 

@@ -91,14 +91,21 @@ queries (one, two across a pivot, none for empty input) by collecting
 keys into a single `WHERE IN` per table and stitching rows in memory.
 `loadOne` covers the single-row kinds. `deleteRelated` removes
 dependent rows with the builder delete primitive, which is what keeps
-polymorphic children from orphaning.
+polymorphic children from orphaning. Its mode sets the child contract
+explicitly: `force` (the default) removes physically including pivot
+detaches, `soft` stamps the child delete column and skips already
+stamped rows while pivot links still detach physically, `ignore` touches
+nothing. `belongsTo` owns no rows and throws in every mode. Bulk paths
+fire no hooks.
 
 ## Lifecycle
 
 Hooks run around model writes only: `saving` plus `creating` before an
 insert and `created` plus `saved` after, `saving` plus `updating`
 before a dirty update and `updated` plus `saved` after, `deleting`
-before a delete and `deleted` after. A throw vetoes the write before
+before a delete and `deleted` after, `restoring` before a restore and
+`restored` after, `forceDeleting` before a force delete and
+`forceDeleted` after. A throw vetoes the write before
 any SQL runs. The CRUD functions never dispatch, so bulk and raw paths
 have explicit no-event semantics.
 
@@ -129,6 +136,24 @@ serializes before validation and SQL, `castOut` normalizes on hydrate,
 and dirty tracking compares normalized values so `1` equals `true`
 and `'{"a":1}'` equals `{a:1}`. Null stays null both ways, corrupt
 values throw `CastError` naming the column.
+
+Soft deletes are opt-in per model: `static softDeletes = true` plus a
+`deleted_at` column, and the flag without the column throws on every
+soft path instead of deleting physically by accident. `delete` stamps
+the column and fires `deleting`/`deleted`; model reads (`find`,
+`findOrFail`, `all`, `query`) hide stamped rows when the flag is set,
+while relation loads filter whenever the target struct declares the
+column (struct level, no flag involved), and raw CRUD plus
+raw SQL never scope. `withTrashed` (model scope, builder method, load
+option) shows trashed rows again. `restore` clears the stamp with
+`restoring`/`restored`, `forceDelete` removes the row physically with
+`forceDeleting`/`forceDeleted`. Repeat behavior is fixed: deleting a
+trashed instance and restoring a clean one are silent no-ops, a second
+`forceDelete` succeeds with zero rows. Bulk `deleteWhere` on a soft
+model stamps matches (skipping trashed) with no hooks, matching the
+no-event rule for bulk paths. Soft paths never touch `updated_at` and
+compose with `datetime` casts on `deleted_at`. `Model.delete` never
+cascades; compose `deleteRelated` explicitly for the child contract.
 
 No savepoint nesting: each `transaction` call checks out an
 independent connection and commits independently. Concurrent nesting on
