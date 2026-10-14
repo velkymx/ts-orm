@@ -35,9 +35,19 @@
     "mysql2": "^3.14.0",
     "uuid": "^11.1.0"
   },
+  "peerDependencies": {
+    "mssql": ">=11"
+  },
+  "peerDependenciesMeta": {
+    "mssql": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@types/mssql": "^12.3.0",
     "@types/node": "^26.6.5",
     "eslint": "^9.24.0",
+    "mssql": "^12.7.6",
     "prettier": "^3.5.3",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
