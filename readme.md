@@ -8,12 +8,17 @@ npm i @velkymx/ts-orm
 
 ## A first taste
 
-This runs as written on Node 24 or later, using the built-in SQLite driver and an in-memory database.
+Import plus environment is the whole setup. `createDefaultDriver()` reads the engine and connection settings from the environment, loading a `.env` file automatically, so there is no `configure` call and no driver to pick by hand.
+
+```bash
+# .env
+DB_DIALECT=sqlite   # mysql, postgres, sqlite, or mssql; defaults to mysql
+```
 
 ```ts
-import { defineStruct, createSqliteDriver, create, read } from '@velkymx/ts-orm';
+import { defineStruct, createDefaultDriver, create, read } from '@velkymx/ts-orm';
 
-const driver = createSqliteDriver({ filename: ':memory:' });
+const driver = createDefaultDriver();
 
 const User = defineStruct('users', {
   id: { type: 'number', required: true, default: 'auto_increment' },
@@ -29,6 +34,8 @@ console.log(users.data); // [{ id: 1, name: 'Ada' }]
 
 await driver.close();
 ```
+
+With `DB_DIALECT=sqlite` this runs as written on Node 24 or later against an in-memory database (set `DB_FILE` to use a file instead). Switching engines is a one-line environment change, not a code change.
 
 The struct is the only schema you write. The row type, the insert type, and the update type are inferred from it, so your editor knows `name` is a string and `id` is a number without a second declaration.
 
