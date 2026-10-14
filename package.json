@@ -1,11 +1,11 @@
 {
   "name": "@velkymx/ts-orm",
-  "version": "1.5.0",
-  "description": "A lightweight CRUD ORM built on MySQL2 using JSON-based structs",
+  "version": "2.0.0-dev.0",
+  "description": "A lightweight, type-safe TypeScript ORM built on MySQL2 using self-documenting structs",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/velkymx/ts-orm.git"
+    "url": "git+https://github.com/velkymx/ts-orm.git"
   },
   "bugs": {
     "url": "https://github.com/velkymx/ts-orm/issues"
@@ -22,11 +22,11 @@
     "orm",
     "mysql",
     "crud",
-    "json",
+    "typescript",
+    "type-safe",
     "validator",
     "mysql2",
-    "nodejs",
-    "techno-sorcery"
+    "nodejs"
   ],
   "author": "TechnoSorcery.com",
   "license": "MIT",
@@ -36,18 +36,16 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "eslint": "^9.24.0",
-    "jest": "^29.7.0",
-    "prettier": "^3.5.3"
+    "prettier": "^3.5.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
   },
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
-  },
-  "jest": {
-    "testMatch": [
-      "**/tests/**/*.test.mjs"
-    ],
-    "testEnvironment": "node",
-    "transform": {}
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   }
 }
