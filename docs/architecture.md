@@ -83,8 +83,10 @@ their drivers, SQLite as a single embedded handle. `closePool` and
 Transactions check out a dedicated connection, run `BEGIN`, then commit
 on success or roll back on throw, and always release. `TxHandle` adds
 `AsyncDisposable`, so a throw inside an `await using` scope still
-releases. A `TxConnection` satisfies `Driver`, so CRUD, builders, and
-models run inside transactions unchanged.
+releases. `Driver` itself is async disposable too: leaving an
+`await using` scope closes pool drivers and releases checked-out
+connections, so throws never leak. A `TxConnection` satisfies `Driver`,
+so CRUD, builders, and models run inside transactions unchanged.
 
 ## Relations
 

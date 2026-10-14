@@ -21,6 +21,9 @@ function stubDriver(
     async close(): Promise<void> {
       opts.closed.value = true;
     },
+    async [Symbol.asyncDispose](): Promise<void> {
+      opts.closed.value = true;
+    },
   };
 }
 

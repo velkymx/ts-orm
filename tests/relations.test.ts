@@ -79,6 +79,7 @@ function counting(base: Driver): { driver: Driver; reads: () => number } {
     },
     execute: (sql, params) => base.execute(sql, params),
     close: () => base.close(),
+    [Symbol.asyncDispose]: () => base[Symbol.asyncDispose](),
   };
   return { driver, reads: () => n };
 }

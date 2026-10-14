@@ -219,6 +219,7 @@ describe('lifecycle dispatcher (issue 79)', () => {
       },
       rollback: async () => {},
       release: async () => {},
+      [Symbol.asyncDispose]: async () => {},
     };
     const stub: Driver = {
       dialect: sqlite,
@@ -226,6 +227,7 @@ describe('lifecycle dispatcher (issue 79)', () => {
       execute: async () => ({ affectedRows: 0 }),
       close: async () => {},
       beginTransaction: async () => tx,
+      [Symbol.asyncDispose]: async () => {},
     };
     await expect(
       transaction(stub, async (t) => {

@@ -51,6 +51,10 @@ export function createMysqlDriver(): Driver {
       await closePool();
     },
 
+    async [Symbol.asyncDispose](): Promise<void> {
+      await closePool();
+    },
+
     async beginTransaction(): Promise<TxConnection> {
       const conn = await getPool().getConnection();
       await conn.beginTransaction();
@@ -86,6 +90,10 @@ export function createMysqlDriver(): Driver {
         },
 
         async release(): Promise<void> {
+          conn.release();
+        },
+
+        async [Symbol.asyncDispose](): Promise<void> {
           conn.release();
         },
       };

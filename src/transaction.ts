@@ -67,10 +67,10 @@ export async function beginTransaction(driver: Driver): Promise<TxHandle> {
 
 /**
  * Run fn inside a transaction. Commits on success, rolls back on throw, and
- * always releases. Queued after-commit work drains only after the commit
- * succeeds. Each call owns an independent connection: there are no
- * savepoints, so nested calls commit independently. The original error is
- * preserved when rollback also fails.
+ * always releases through an `await using` handle. Queued after-commit work
+ * drains only after the commit succeeds. Each call owns an independent
+ * connection: there are no savepoints, so nested calls commit
+ * independently. The original error is preserved when rollback also fails.
  */
 export async function transaction<T>(
   driver: Driver,
@@ -80,7 +80,7 @@ export async function transaction<T>(
   if (!begin) {
     throw new TransactionNotSupportedError();
   }
-  const handle = new TxHandle(await begin());
+  await using handle = new TxHandle(await begin());
   try {
     const result = await fn(handle.tx);
     await handle.commit();
@@ -93,7 +93,5 @@ export async function transaction<T>(
       // Prefer the original failure over a rollback failure.
     }
     throw error;
-  } finally {
-    await handle[Symbol.asyncDispose]();
   }
 }
