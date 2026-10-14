@@ -36,6 +36,20 @@ await driver.close();
 - Transactions with auto commit/rollback plus disposable handles
 - Validation-first writes and a sanitized, injectable-logger error route
 
+## CLI
+
+Generate a struct field map from a live MySQL table:
+
+```bash
+npx ts-orm struct users
+```
+
+It reads the table through the shared connection (set `DB_HOST`, `DB_USER`,
+`DB_DATABASE`, and optionally `DB_PASSWORD` and `DB_PORT`) and writes the
+mapped fields to `./users.json`. Fold that output into `defineStruct` to
+declare the model. On an invalid table name or a connection failure it prints
+a message and exits non-zero.
+
 ## Docs
 
 - [Getting started](docs/getting-started.md): installation, configuration, first model, first query

@@ -76,6 +76,8 @@ export type { CastType, Casts } from './casts.js';
 export { CastError, castIn, castOut, valuesEqual } from './casts.js';
 export type { ShowColumnRow, IntrospectedField } from './introspect.js';
 export { mapColumnToField, generateStructFromTable } from './introspect.js';
+export type { CliDeps } from './cli.js';
+export { runCli } from './cli.js';
 
 export type {
   RelationKind,
