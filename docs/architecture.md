@@ -29,7 +29,10 @@ A builder call compiles in three stages:
    order (`?`, `$n`, `@pN`).
 3. The driver runs the statement: `get` returns rows, `first` caps at
    one, `count` reuses the filters without order or paging, `delete`
-   removes matching rows and reports `affectedRows`.
+   removes matching rows and reports `affectedRows`. `sum`, `avg`,
+   `min`, and `max` aggregate one column, returning `null` when no rows
+   match; `paginate` composes a count with one bounded page into a
+   totals envelope.
 
 `toSQL`, `toCountSQL`, and `toDeleteSQL` expose the compiled statement
 plus params without I/O, which doubles as the inspection hatch for

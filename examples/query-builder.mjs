@@ -52,5 +52,8 @@ const gone = await query(driver, User).where('name', 'hal').delete();
 console.log('deleted:', gone.data);
 assert.equal((await query(driver, User).count()).data, 3);
 
+console.log('older sum:', (await query(driver, User).where('age', '>=', 18).sum('age')).data);
+console.log('page 1:', await query(driver, User).orderBy('age', 'asc').paginate(1, 2));
+
 await driver.close();
 console.log('query-builder ok');
