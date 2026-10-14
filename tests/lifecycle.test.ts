@@ -5,6 +5,8 @@ import { create } from '../src/crud.js';
 import { transaction } from '../src/transaction.js';
 import { afterCommit, isTransaction } from '../src/lifecycle.js';
 import type { HookContext } from '../src/lifecycle.js';
+import { sqlite } from '../src/dialect.js';
+import type { TxConnection } from '../src/driver.js';
 import { setLogger } from '../src/errors.js';
 import { createSqliteDriver } from '../src/drivers/sqlite.js';
 import type { Driver } from '../src/driver.js';
@@ -165,6 +167,74 @@ describe('lifecycle dispatcher (issue 79)', () => {
     await transaction(driver, async (tx) => {
       expect(isTransaction(tx)).toBe(true);
     });
+    await driver.close();
+  });
+
+  it('a failed transaction leaks no callbacks into later ones', async () => {
+    const driver = await setup();
+    const ran: string[] = [];
+    await expect(
+      transaction(driver, async (tx) => {
+        await afterCommit(tx, async () => void ran.push('dead'));
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    await transaction(driver, async (tx) => {
+      await afterCommit(tx, async () => void ran.push('live'));
+    });
+    expect(ran).toEqual(['live']);
+    await driver.close();
+  });
+
+  it('a veto inside a caller transaction leaves it open and usable', async () => {
+    const driver = await setup();
+    class M extends defineModel(driver, User) {
+      static override hooks = {
+        creating: async (ctx: HookContext<typeof User.fields>) => {
+          if ((ctx.changes as { name?: string }).name === 'no') {
+            throw new Error('vetoed');
+          }
+        },
+      };
+    }
+    await transaction(driver, async (tx) => {
+      await M.create({ name: 'ok' }, tx);
+      await expect(M.create({ name: 'no' }, tx)).rejects.toThrow('vetoed');
+      await M.create({ name: 'ok2' }, tx);
+    });
+    expect((await M.all()).map((m) => m.toRow().name)).toEqual(['ok', 'ok2']);
+    await driver.close();
+  });
+
+  it('skips the queue when commit itself fails', async () => {
+    const driver = await setup();
+    let ran = false;
+    const tx: TxConnection = {
+      dialect: sqlite,
+      query: async <Row>(): Promise<Row[]> => [],
+      execute: async () => ({ affectedRows: 0 }),
+      close: async () => {},
+      commit: async () => {
+        throw new Error('commit boom');
+      },
+      rollback: async () => {},
+      release: async () => {},
+    };
+    const stub: Driver = {
+      dialect: sqlite,
+      query: async <Row>(): Promise<Row[]> => [],
+      execute: async () => ({ affectedRows: 0 }),
+      close: async () => {},
+      beginTransaction: async () => tx,
+    };
+    await expect(
+      transaction(stub, async (t) => {
+        await afterCommit(t, async () => {
+          ran = true;
+        });
+      }),
+    ).rejects.toThrow('commit boom');
+    expect(ran).toBe(false);
     await driver.close();
   });
 });

@@ -67,7 +67,10 @@ export async function beginTransaction(driver: Driver): Promise<TxHandle> {
 
 /**
  * Run fn inside a transaction. Commits on success, rolls back on throw, and
- * always releases. The original error is preserved when rollback also fails.
+ * always releases. Queued after-commit work drains only after the commit
+ * succeeds. Each call owns an independent connection: there are no
+ * savepoints, so nested calls commit independently. The original error is
+ * preserved when rollback also fails.
  */
 export async function transaction<T>(
   driver: Driver,

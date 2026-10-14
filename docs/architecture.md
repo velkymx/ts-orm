@@ -107,4 +107,16 @@ on plain drivers and defer to the outer commit inside a caller
 transaction through `afterCommit`, drained by `transaction` and
 `TxHandle.commit`. Deferred failures log through the error route and
 never fail the write, so a committed write is never reported as
-rolled back.
+rolled back. Delivery is best-effort with no retry or durability; use
+an outbox for crash-durable needs.
+
+`afterCreate` and `afterUpdate` mean after the write commits (or after
+the autocommitted write on plain drivers), never merely after the SQL
+runs inside an open transaction. The CRUD functions never dispatch, so
+`Model.save` carries lifecycle behavior while lower-level CRUD calls
+stay side-effect free; never expect hooks from a CRUD call.
+
+No savepoint nesting: each `transaction` call checks out an
+independent connection and commits independently. Concurrent nesting on
+single-connection drivers fails at the engine; pool drivers commit the
+inner transaction even if the caller later rolls back its own.
