@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { mssql as mssqlDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
-import { OrmError, type OrmErrorCode } from '../errors.js';
+import { OrmError, logError, type OrmErrorCode } from '../errors.js';
 
 const NUMBERS: Record<number, OrmErrorCode> = {
   2627: 'duplicate',
@@ -52,12 +52,13 @@ function peer(): typeof sql {
 }
 let overrides: Partial<DbConfig> | null = null;
 
-/** Supply explicit configuration, overriding the environment. Resets the pool. */
+/** Supply explicit configuration, overriding the environment. Resets the pool. Reconfigure only when quiescent; the old pool drains in the background with failures logged. */
 export function configureMssql(config: Partial<DbConfig>): void {
   overrides = config;
   if (pool) {
-    void pool.close();
+    const old = pool;
     pool = null;
+    old.close().catch((error: unknown) => logError('mssql pool shutdown failed', error));
   }
 }
 
