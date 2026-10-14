@@ -49,6 +49,13 @@ function getPool(): pg.Pool {
 }
 
 export function createPostgresDriver(): Driver {
+  async function close(): Promise<void> {
+    if (pool) {
+      await pool.end();
+      pool = null;
+    }
+  }
+
   return {
     dialect: postgresDialect,
 
@@ -73,11 +80,10 @@ export function createPostgresDriver(): Driver {
       }
     },
 
-    async close(): Promise<void> {
-      if (pool) {
-        await pool.end();
-        pool = null;
-      }
+    close,
+
+    async [Symbol.asyncDispose](): Promise<void> {
+      await close();
     },
 
     async beginTransaction(): Promise<TxConnection> {
@@ -118,6 +124,10 @@ export function createPostgresDriver(): Driver {
         },
 
         async release(): Promise<void> {
+          client.release();
+        },
+
+        async [Symbol.asyncDispose](): Promise<void> {
           client.release();
         },
       };

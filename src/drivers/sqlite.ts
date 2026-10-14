@@ -35,6 +35,13 @@ export function createSqliteDriver(options: SqliteOptions = {}): Driver {
     return db;
   }
 
+  async function close(): Promise<void> {
+    if (db) {
+      db.close();
+      db = null;
+    }
+  }
+
   return {
     dialect: sqliteDialect,
 
@@ -60,11 +67,10 @@ export function createSqliteDriver(options: SqliteOptions = {}): Driver {
       }
     },
 
-    async close(): Promise<void> {
-      if (db) {
-        db.close();
-        db = null;
-      }
+    close,
+
+    async [Symbol.asyncDispose](): Promise<void> {
+      await close();
     },
 
     async beginTransaction(): Promise<TxConnection> {
@@ -97,6 +103,9 @@ export function createSqliteDriver(options: SqliteOptions = {}): Driver {
         },
 
         async close(): Promise<void> {},
+
+        // Matches release: sqlite transactions hold no checkout to return.
+        async [Symbol.asyncDispose](): Promise<void> {},
 
         async commit(): Promise<void> {
           handle.exec('COMMIT');

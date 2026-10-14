@@ -23,6 +23,13 @@ export interface Driver {
   execute(sql: string, params: readonly BindValue[]): Promise<ExecuteResult>;
   /** Release underlying resources. */
   close(): Promise<void>;
+  /**
+   * AsyncDisposable hook for `await using` scopes. Pool drivers close;
+   * checked-out connections release back to the pool. Settle a
+   * transaction before its scope ends; TxHandle stays the safe path
+   * because it also rolls back when unsettled.
+   */
+  [Symbol.asyncDispose](): Promise<void>;
   /** Check out a dedicated connection with an open transaction, when supported. */
   beginTransaction?(): Promise<TxConnection>;
 }

@@ -20,6 +20,7 @@ function fakeDriver(dialect = mysql): Driver {
     query: async <Row>(): Promise<Row[]> => [],
     execute: async () => ({ affectedRows: 0 }),
     close: async () => {},
+    [Symbol.asyncDispose]: async () => {},
   };
 }
 

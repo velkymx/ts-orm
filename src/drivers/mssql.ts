@@ -73,6 +73,13 @@ function toExecuteResult(result: sql.IResult<unknown>): ExecuteResult {
 }
 
 export function createMssqlDriver(): Driver {
+  async function close(): Promise<void> {
+    if (pool) {
+      await pool.close();
+      pool = null;
+    }
+  }
+
   return {
     dialect: mssqlDialect,
 
@@ -98,11 +105,10 @@ export function createMssqlDriver(): Driver {
       }
     },
 
-    async close(): Promise<void> {
-      if (pool) {
-        await pool.close();
-        pool = null;
-      }
+    close,
+
+    async [Symbol.asyncDispose](): Promise<void> {
+      await close();
     },
 
     async beginTransaction(): Promise<TxConnection> {
@@ -144,6 +150,9 @@ export function createMssqlDriver(): Driver {
         },
 
         async release(): Promise<void> {},
+
+        // Matches release: the mssql transaction needs no manual return.
+        async [Symbol.asyncDispose](): Promise<void> {},
       };
     },
   };

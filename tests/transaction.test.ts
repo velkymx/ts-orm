@@ -57,6 +57,7 @@ describe('transaction callback API (issue 20)', () => {
       query: async <Row>(): Promise<Row[]> => [],
       execute: async () => ({ affectedRows: 0 }),
       close: async () => {},
+      [Symbol.asyncDispose]: async () => {},
     };
     await expect(transaction(stub, async () => {})).rejects.toThrow(
       'transactions are not supported by this driver',
