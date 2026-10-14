@@ -90,8 +90,8 @@ await handle.commit();
 // disposal would roll back first.
 ```
 
-Prefer `await using` or the callback form over a bare handle. They guarantee the connection returns to the pool in a clean state.
+Prefer `await using` or the callback form over a bare handle. They guarantee the connection returns to the pool in a clean state. A raw sqlite transaction that is never settled or disposed stalls the driver, since no later operation can take the lock.
 
 ## Nesting
 
-There are no savepoints. Each `transaction` call checks out its own independent connection and commits on its own. On a single-connection driver, nesting one transaction inside another fails at the engine. On a pooled driver, an inner transaction commits independently of the outer one, so do not treat nested calls as a rollback boundary. Keep one transaction per logical unit of work.
+On pooled drivers there are no savepoints. Each `transaction` call checks out its own independent connection and commits on its own, so do not treat nested calls as a rollback boundary. SQLite is the exception: it nests inner transactions as savepoints, so an inner rollback undoes only the inner work. Keep one transaction per logical unit of work.
