@@ -17,6 +17,13 @@
   behind the `Driver` contract; SQLite adds nothing on Node 24+.
 - Errors are safe by default. Driver failures map to `OrmError` codes
   with client-safe messages; full detail goes to an injectable logger.
+- Erasable syntax only. Sources use no `enum`, `namespace`, parameter
+  properties, decorators, or `any`, enforced by `erasableSyntaxOnly`
+  plus `verbatimModuleSyntax` in tsconfig and the `no-explicit-any`
+  lint rule. `tests/strip-types.test.ts` executes real sources under
+  Node type stripping with no build step, so regressions fail loudly.
+  Legacy `.js` twins that shadow a TS module are removed on sight:
+  they silently win module resolution.
 - Introspection reads, never owns. `generateStructFromTable` maps a
   live MySQL table to struct fields over the shared driver (no private
   pool), with `tinyint(1)` alone meaning boolean. The CLI `struct`
