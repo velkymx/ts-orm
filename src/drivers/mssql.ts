@@ -110,7 +110,7 @@ export function createMssqlDriver(): Driver {
         const request = (await getPool()).request();
         bind(request, params);
         const result = await request.query<Row>(text);
-        return result.recordset;
+        return result.recordset ?? [];
       } catch (error) {
         throw mapMssqlError(error);
       }
@@ -148,7 +148,7 @@ export function createMssqlDriver(): Driver {
             const request = new (peer().Request)(tx);
             bind(request, params);
             const result = await request.query<Row>(text);
-            return result.recordset;
+            return result.recordset ?? [];
           } catch (error) {
             throw mapMssqlError(error);
           }
