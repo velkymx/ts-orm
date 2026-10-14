@@ -19,8 +19,8 @@ describe('package shape (issue 32)', () => {
     expect(root['import']).toBe('./dist/index.js');
   });
 
-  it('restricts shipped files to dist plus bin', () => {
-    expect(pkg['files']).toEqual(['dist', 'bin']);
+  it('restricts shipped files to the built dist tree', () => {
+    expect(pkg['files']).toEqual(['dist']);
   });
 
   it('builds and tests before publish', () => {
@@ -30,9 +30,9 @@ describe('package shape (issue 32)', () => {
     expect(scripts['prepublishOnly']).toContain('npm test');
   });
 
-  it('keeps the runnable bin entry', () => {
+  it('points the bin at the built cli and ships its source', () => {
     const bin = pkg['bin'] as Record<string, string>;
-    expect(bin['ts-orm']).toBe('./bin/cli.js');
-    expect(existsSync(join(root, 'bin', 'cli.js'))).toBe(true);
+    expect(bin['ts-orm']).toBe('./dist/bin/cli.js');
+    expect(existsSync(join(root, 'src', 'bin', 'cli.ts'))).toBe(true);
   });
 });

@@ -21,11 +21,10 @@
     }
   },
   "files": [
-    "dist",
-    "bin"
+    "dist"
   ],
   "bin": {
-    "ts-orm": "./bin/cli.js"
+    "ts-orm": "./dist/bin/cli.js"
   },
   "keywords": [
     "orm",
@@ -73,7 +72,7 @@
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "oxlint src tests bin",
+    "lint": "oxlint src tests",
     "prepublishOnly": "npm run build && npm test"
   }
 }
