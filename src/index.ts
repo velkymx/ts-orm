@@ -42,6 +42,7 @@ export {
   isValidDate,
   isValidBoolean,
   validatePayload,
+  validateRow,
 } from './validation.js';
 
 export type { BuiltStatement, ReadOptions, JoinSpec } from './crud.js';

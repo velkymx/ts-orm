@@ -15,7 +15,11 @@ guides it links: [Queries](queries.md), [Models](models.md),
   full type inference; `driver.query` and `driver.execute` stay open as
   a raw SQL escape hatch with caller-chosen return generics.
 - Validation before I/O. Payloads validate against the struct first, so
-  bad writes never reach the database.
+  bad writes never reach the database. Reads trust the engine by default:
+  use `validateRow` at ingestion boundaries to check raw rows, and note
+  that Postgres returns BIGINT and NUMERIC columns as strings while MySQL
+  rounds integers past 2^53, so model huge counts as strings or ranges,
+  not plain numbers.
 - Results, not throws, for operations. CRUD returns a `Result` envelope
   discriminated on `success`; only `findOrFail` (and model equivalents)
   throw `NotFoundError`.
