@@ -150,4 +150,4 @@ Models are where hooks, automatic timestamps, attribute casts, and soft deletes 
 
 ## Where to go next
 
-You now have the whole surface in miniature: a driver, a struct, CRUD, a query, and a model. The rest of the documentation takes each of those further. [Queries](queries.md) and [Models](models.md) are the common next stops; [Relations](relations.md), [Transactions](transactions.md), and [Schema and migrations](schema-and-migrations.md) cover the larger pieces when you need them.
+You now have the whole surface in miniature: a driver, a struct, CRUD, a query, and a model. The rest of the documentation takes each of those further. [Queries](queries.md) and [Models](models.md) are the common next stops; [Relations](relations.md), [Transactions](transactions.md), and [Schema and migrations](schema-and-migrations.md) cover the larger pieces when you need them. [Frameworks](frameworks.md) shows the same code inside Express and Next.js.
