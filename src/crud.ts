@@ -125,6 +125,40 @@ export async function read<Table extends string, F extends Fields>(
   }
 }
 
+/** Thrown by findOrFail when no row matches. */
+export class NotFoundError extends Error {
+  constructor(message = 'Record not found') {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
+
+/** Read a single row by equality conditions, or null when none matches. */
+export async function readOne<Table extends string, F extends Fields>(
+  driver: Driver,
+  struct: Struct<Table, F>,
+  conditions: Partial<RowOf<F>> = {},
+): Promise<Result<RowOf<F> | null>> {
+  const result = await read(driver, struct, conditions, { limit: 1 });
+  if (!result.success) return result;
+  const row = result.data[0];
+  return row === undefined ? ok(null, 'Record not found') : ok(row, 'Record found');
+}
+
+/** Read a single row by one column, throwing NotFoundError when absent. */
+export async function findOrFail<Table extends string, F extends Fields>(
+  driver: Driver,
+  struct: Struct<Table, F>,
+  key: keyof F & string,
+  value: BindValue,
+): Promise<RowOf<F>> {
+  const result = await readOne(driver, struct, { [key]: value } as Partial<RowOf<F>>);
+  if (!result.success || result.data === null) {
+    throw new NotFoundError();
+  }
+  return result.data;
+}
+
 /** Insert a record, returning the new row id. Validates the payload first. */
 export async function create<Table extends string, F extends Fields>(
   driver: Driver,
