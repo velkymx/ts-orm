@@ -20,7 +20,7 @@ export type { Ok, Err, Result } from './result.js';
 export { ok, fail } from './result.js';
 
 export type { OrmErrorCode, Logger } from './errors.js';
-export { OrmError, setLogger, resetLogger, sanitizeError } from './errors.js';
+export { OrmError, setLogger, resetLogger, logError, sanitizeError } from './errors.js';
 
 export type { SafeIdentifier } from './identifiers.js';
 export { isIdentifier, isQualifiedIdentifier, safeIdentifier, safeQualified, escapeLike } from './identifiers.js';
@@ -68,6 +68,9 @@ export { TransactionNotSupportedError, TxHandle, beginTransaction, transaction }
 
 export type { ModelInstance, ModelStatic } from './model.js';
 export { defineModel } from './model.js';
+
+export type { HookName, HookContext, HookFn, ModelHooks } from './lifecycle.js';
+export { runHooks, isTransaction, afterCommit, drainAfterCommit, deliver } from './lifecycle.js';
 
 export type {
   RelationKind,

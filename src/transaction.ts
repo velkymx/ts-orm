@@ -7,6 +7,7 @@
  */
 
 import type { Driver, TxConnection } from './driver.js';
+import { drainAfterCommit } from './lifecycle.js';
 
 /** Thrown when a driver has no transaction support. */
 export class TransactionNotSupportedError extends Error {
@@ -29,10 +30,11 @@ export class TxHandle {
     this.tx = tx;
   }
 
-  /** Commit the transaction and mark the handle settled. */
+  /** Commit the transaction, then deliver queued after-commit work. */
   async commit(): Promise<void> {
     await this.tx.commit();
     this.settled = true;
+    await drainAfterCommit(this.tx);
   }
 
   /** Roll back the transaction and mark the handle settled. */
@@ -65,7 +67,10 @@ export async function beginTransaction(driver: Driver): Promise<TxHandle> {
 
 /**
  * Run fn inside a transaction. Commits on success, rolls back on throw, and
- * always releases. The original error is preserved when rollback also fails.
+ * always releases. Queued after-commit work drains only after the commit
+ * succeeds. Each call owns an independent connection: there are no
+ * savepoints, so nested calls commit independently. The original error is
+ * preserved when rollback also fails.
  */
 export async function transaction<T>(
   driver: Driver,
@@ -79,6 +84,7 @@ export async function transaction<T>(
   try {
     const result = await fn(handle.tx);
     await handle.commit();
+    await drainAfterCommit(handle.tx);
     return result;
   } catch (error) {
     try {

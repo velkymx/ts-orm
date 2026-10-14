@@ -17,6 +17,7 @@ import {
   remove,
 } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
+import { deliver, runHooks, type HookContext, type ModelHooks } from './lifecycle.js';
 import { QueryBuilder, query } from './query.js';
 import type { Fields, InsertOf, RowOf, Struct } from './struct.js';
 
@@ -53,6 +54,8 @@ export interface ModelStatic<Table extends string, F extends Fields> {
   all<T>(this: new (data?: Partial<RowOf<F>>) => T, driver?: Driver): Promise<T[]>;
   /** Validate, insert, and return the hydrated instance. */
   create<T>(this: new (data?: Partial<RowOf<F>>) => T, payload: InsertOf<F>, driver?: Driver): Promise<T>;
+  /** Per-model hook table. Absent means the lifecycle passes through silently. */
+  readonly hooks?: ModelHooks<F>;
   /** Delete rows matching equality conditions in one statement. */
   deleteWhere(conditions: Partial<RowOf<F>>, driver?: Driver): Promise<{ affectedRows: number }>;
   /** Fluent builder over this model table, rows come back unhydrated. */
@@ -76,9 +79,18 @@ export function defineModel<Table extends string, F extends Fields>(
     return errors.length > 0 ? `${message}: ${errors.join(', ')}` : message;
   }
 
+  function hooksOf(ctor: unknown): ModelHooks<F> | undefined {
+    return (ctor as { hooks?: ModelHooks<F> }).hooks;
+  }
+
+  function context(attributes: Row, changes: Partial<Row>): HookContext<F> {
+    return { attributes: { ...attributes }, changes: { ...changes } };
+  }
+
   class Model {
     static readonly boundDriver: Driver = driver;
     static readonly boundStruct: Struct<Table, F> = struct;
+    static hooks: ModelHooks<F> | undefined = undefined;
 
     protected attributes: Row;
     protected original: Row;
@@ -131,7 +143,11 @@ export function defineModel<Table extends string, F extends Fields>(
       payload: InsertOf<F>,
       drv?: Driver,
     ): Promise<T> {
-      const result = await createRow(pick(drv), struct, payload);
+      const target = pick(drv);
+      const hooks = hooksOf(this);
+      await runHooks(hooks, 'saving', context(payload as Row, payload as Partial<Row>));
+      await runHooks(hooks, 'creating', context(payload as Row, payload as Partial<Row>));
+      const result = await createRow(target, struct, payload);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
@@ -139,7 +155,9 @@ export function defineModel<Table extends string, F extends Fields>(
       if (result.data.id !== undefined) {
         (row as Record<string, unknown>)[pk] = result.data.id;
       }
-      return this.hydrate(row as Row);
+      const instance = this.hydrate(row as Row);
+      await deliver(target, hooks, ['created', 'saved'], context(row as Row, payload as Partial<Row>));
+      return instance;
     }
 
     static query(drv?: Driver): QueryBuilder<Table, F> {
@@ -201,8 +219,11 @@ export function defineModel<Table extends string, F extends Fields>(
 
     async save(drv?: Driver): Promise<this> {
       const target = pick(drv);
+      const hooks = hooksOf(this.constructor);
       const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
       if (id === undefined || id === null) {
+        await runHooks(hooks, 'saving', context(this.attributes, this.attributes));
+        await runHooks(hooks, 'creating', context(this.attributes, this.attributes));
         const result = await createRow(target, struct, this.attributes as InsertOf<F>);
         if (!result.success) {
           throw new Error(failMessage(result.message, result.errors));
@@ -211,31 +232,38 @@ export function defineModel<Table extends string, F extends Fields>(
           (this.attributes as Record<string, unknown>)[pk] = result.data.id;
         }
         this.original = { ...this.attributes };
+        await deliver(target, hooks, ['created', 'saved'], context(this.attributes, this.attributes));
         return this;
       }
       const changes = this.getChanges();
       if (Object.keys(changes).length === 0) {
         return this;
       }
+      await runHooks(hooks, 'saving', context(this.attributes, changes));
+      await runHooks(hooks, 'updating', context(this.attributes, changes));
       const { sql, params } = buildUpdate(target.dialect, struct, {
         ...(changes as Record<string, unknown>),
         [pk]: id,
       }, pk);
       await target.execute(sql, params);
       this.original = { ...this.attributes };
+      await deliver(target, hooks, ['updated', 'saved'], context(this.attributes, changes));
       return this;
     }
 
     async delete(drv?: Driver): Promise<void> {
       const target = pick(drv);
+      const hooks = hooksOf(this.constructor);
       const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
       if (id === undefined || id === null) {
         throw new Error('Cannot delete a model without a primary key value');
       }
+      await runHooks(hooks, 'deleting', context(this.attributes, {}));
       const result = await remove(target, struct, key, id);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
+      await deliver(target, hooks, ['deleted'], context(this.attributes, {}));
     }
   }
 
