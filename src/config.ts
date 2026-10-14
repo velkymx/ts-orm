@@ -1,8 +1,13 @@
 /**
  * Database configuration. Resolved from the environment with optional explicit
  * overrides, and validated up front so a missing setting fails with a clear
- * message instead of surfacing later as an opaque connection error.
+ * message instead of surfacing later as an opaque connection error. Importing
+ * this module loads `.env` once via dotenv (which never overrides already
+ * set variables); every engine's config path reads through here, so all
+ * drivers pick up file settings with no manual bootstrap.
  */
+
+import 'dotenv/config';
 
 export interface DbConfig {
   readonly host: string;
