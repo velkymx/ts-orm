@@ -48,5 +48,9 @@ assert.equal(total.data, 3);
 const first = await query(driver, User).orderBy('age', 'asc').first();
 console.log('youngest:', first.data.name);
 
+const gone = await query(driver, User).where('name', 'hal').delete();
+console.log('deleted:', gone.data);
+assert.equal((await query(driver, User).count()).data, 3);
+
 await driver.close();
 console.log('query-builder ok');

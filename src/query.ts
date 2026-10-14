@@ -393,6 +393,27 @@ export class QueryBuilder<Table extends string, F extends Fields> {
       return fail('Database operation failed', [(error as Error).message]);
     }
   }
+
+  /** Compile the DELETE over the same filters, ignoring order and paging. Raw hatch. */
+  toDeleteSQL(): BuiltStatement {
+    const dialect = this.driver.dialect;
+    const counter: Counter = { n: 0 };
+    const params: BindValue[] = [];
+    const table = safeIdentifier(this.struct.table, dialect, 'table name');
+    const where = this.buildWhere(dialect, counter, params);
+    return { sql: `DELETE FROM ${table}${where}`, params };
+  }
+
+  /** Execute DELETE over the current filters and return the affected rows. */
+  async delete(): Promise<Result<{ affectedRows: number }>> {
+    try {
+      const { sql, params } = this.toDeleteSQL();
+      const result = await this.driver.execute(sql, params);
+      return ok({ affectedRows: result.affectedRows }, 'Records deleted');
+    } catch (error) {
+      return fail('Database operation failed', [(error as Error).message]);
+    }
+  }
 }
 
 /** Start a fluent SELECT over a struct on the given driver. */

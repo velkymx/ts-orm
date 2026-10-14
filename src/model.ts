@@ -53,6 +53,8 @@ export interface ModelStatic<Table extends string, F extends Fields> {
   all<T>(this: new (data?: Partial<RowOf<F>>) => T, driver?: Driver): Promise<T[]>;
   /** Validate, insert, and return the hydrated instance. */
   create<T>(this: new (data?: Partial<RowOf<F>>) => T, payload: InsertOf<F>, driver?: Driver): Promise<T>;
+  /** Delete rows matching equality conditions in one statement. */
+  deleteWhere(conditions: Partial<RowOf<F>>, driver?: Driver): Promise<{ affectedRows: number }>;
   /** Fluent builder over this model table, rows come back unhydrated. */
   query(driver?: Driver): QueryBuilder<Table, F>;
 }
@@ -142,6 +144,21 @@ export function defineModel<Table extends string, F extends Fields>(
 
     static query(drv?: Driver): QueryBuilder<Table, F> {
       return query(pick(drv), struct);
+    }
+
+    static async deleteWhere(
+      conditions: Partial<Row>,
+      drv?: Driver,
+    ): Promise<{ affectedRows: number }> {
+      let builder = query(pick(drv), struct);
+      for (const name of Object.keys(conditions)) {
+        builder = builder.where(name as keyof F & string, (conditions as Record<string, unknown>)[name] as BindValue);
+      }
+      const result = await builder.delete();
+      if (!result.success) {
+        throw new Error(failMessage(result.message, result.errors));
+      }
+      return result.data;
     }
 
     fill(data: Partial<Row>): this {
