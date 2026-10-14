@@ -7,7 +7,7 @@
 import type { Dialect } from './dialect.js';
 import { safeIdentifier } from './identifiers.js';
 import type { BindValue, Driver } from './driver.js';
-import type { Fields, InsertOf, Struct } from './struct.js';
+import type { Fields, InsertOf, RowOf, Struct } from './struct.js';
 import { validatePayload } from './validation.js';
 import { ok, fail, type Result } from './result.js';
 
@@ -56,6 +56,73 @@ export function buildInsert<Table extends string, F extends Fields>(
   }
 
   return { sql, params };
+}
+
+/** Options for a read: ordering and row-window bounds. */
+export interface ReadOptions {
+  readonly orderBy?: string;
+  readonly direction?: 'asc' | 'desc';
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+/** Coerce to a non-negative integer, or undefined when not usable. */
+function toCount(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? n : undefined;
+}
+
+/** Build a SELECT with AND-equality conditions and optional order/limit/offset. */
+export function buildSelect<Table extends string, F extends Fields>(
+  dialect: Dialect,
+  struct: Struct<Table, F>,
+  conditions: Record<string, unknown>,
+  options: ReadOptions,
+): BuiltStatement {
+  const table = safeIdentifier(struct.table, dialect, 'table name');
+  const keys = Object.keys(conditions);
+  const params = keys.map((key) => conditions[key] as BindValue);
+
+  const where = keys.length
+    ? ` WHERE ${keys
+        .map((key, i) => `${safeIdentifier(key, dialect, 'column name')} = ${dialect.placeholder(i + 1)}`)
+        .join(' AND ')}`
+    : '';
+
+  let orderClause = options.orderBy
+    ? `ORDER BY ${safeIdentifier(options.orderBy, dialect, 'order by column')} ${
+        options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'
+      }`
+    : '';
+
+  const limitClause = dialect.limitOffset(toCount(options.limit), toCount(options.offset));
+
+  // SQL Server's OFFSET/FETCH requires an ORDER BY; supply a stable no-op one.
+  if (dialect.name === 'mssql' && limitClause && !orderClause) {
+    orderClause = 'ORDER BY (SELECT NULL)';
+  }
+
+  let sql = `SELECT * FROM ${table}${where}`;
+  if (orderClause) sql += ` ${orderClause}`;
+  if (limitClause) sql += ` ${limitClause}`;
+
+  return { sql, params };
+}
+
+/** Read rows matching equality conditions. */
+export async function read<Table extends string, F extends Fields>(
+  driver: Driver,
+  struct: Struct<Table, F>,
+  conditions: Partial<RowOf<F>> = {},
+  options: ReadOptions = {},
+): Promise<Result<RowOf<F>[]>> {
+  try {
+    const { sql, params } = buildSelect(driver.dialect, struct, conditions, options);
+    const rows = await driver.query<RowOf<F>>(sql, params);
+    return ok(rows, 'Data retrieved');
+  } catch (error) {
+    return fail('Database operation failed', [(error as Error).message]);
+  }
 }
 
 /** Insert a record, returning the new row id. Validates the payload first. */
