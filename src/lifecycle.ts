@@ -56,6 +56,9 @@ export function isTransaction(driver: Driver): driver is TxConnection {
 }
 
 const deferred = new WeakMap<TxConnection, Array<() => Promise<void>>>();
+// Keying: each beginTransaction mints a fresh wrapper object, so entries die
+// with the wrapper on release even when the pool reuses the raw connection.
+// Rollback paths never drain; orphaned entries vanish with their key.
 
 /**
  * Schedule fn after the outer commit, or run it now on a plain driver.

@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { defineStruct } from '../src/struct.js';
 import { defineModel } from '../src/model.js';
 import { create } from '../src/crud.js';
-import { transaction } from '../src/transaction.js';
-import { afterCommit, isTransaction } from '../src/lifecycle.js';
+import { transaction, beginTransaction } from '../src/transaction.js';
+import { afterCommit, isTransaction, drainAfterCommit } from '../src/lifecycle.js';
 import type { HookContext } from '../src/lifecycle.js';
 import { sqlite } from '../src/dialect.js';
 import type { TxConnection } from '../src/driver.js';
@@ -235,6 +235,23 @@ describe('lifecycle dispatcher (issue 79)', () => {
       }),
     ).rejects.toThrow('commit boom');
     expect(ran).toBe(false);
+    await driver.close();
+  });
+
+  it('orphans rolled-back callbacks and drains exactly once', async () => {
+    const driver = await setup();
+    const ran: string[] = [];
+    const handle = await beginTransaction(driver);
+    await afterCommit(handle.tx, async () => void ran.push('rolled-back'));
+    await handle.rollback();
+    await handle[Symbol.asyncDispose]();
+    expect(ran).toEqual([]);
+    const committed = await beginTransaction(driver);
+    await afterCommit(committed.tx, async () => void ran.push('committed'));
+    await committed.commit();
+    await drainAfterCommit(committed.tx);
+    await committed[Symbol.asyncDispose]();
+    expect(ran).toEqual(['committed']);
     await driver.close();
   });
 });
