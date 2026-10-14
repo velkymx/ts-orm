@@ -173,6 +173,21 @@ describe('relations (issue 22)', () => {
     await base.close();
   });
 
+  it('chunks large key sets instead of one giant IN list', async () => {
+    const base = await setup();
+    const { driver, reads } = counting(base);
+    await driver.execute('INSERT INTO "articles" ("author_id", "title") VALUES (?, ?)', [1000, 'bulk']);
+    const parents = [{ id: 1 }, { id: 2 }];
+    for (let i = 0; i < 600; i += 1) parents.push({ id: 1000 + i });
+    const rel = hasMany(Author, Article, 'author_id');
+    const got = await load(driver, rel, parents);
+    expect(reads()).toBe(2);
+    expect(got.get(1)?.map((a) => a.title)).toEqual(['notes', 'objections']);
+    expect(got.get(1000)?.map((a) => a.title)).toEqual(['bulk']);
+    expect(got.get(1599)).toEqual([]);
+    await base.close();
+  });
+
   it('empty parents run zero queries', async () => {
     const base = await setup();
     const { driver, reads } = counting(base);
