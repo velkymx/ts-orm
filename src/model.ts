@@ -241,7 +241,7 @@ export function defineModel<Table extends string, F extends Fields>(
         throw new Error(failMessage(result.message, result.errors));
       }
       const rowStored = { ...stored };
-      if (result.data.id !== undefined) {
+      if ((stored as Record<string, unknown>)[pk] === undefined && result.data.id !== undefined) {
         (rowStored as Record<string, unknown>)[pk] = result.data.id;
       }
       const row = castOut(rowStored as Record<string, unknown>, casts) as Row;
@@ -366,7 +366,7 @@ export function defineModel<Table extends string, F extends Fields>(
         if (!result.success) {
           throw new Error(failMessage(result.message, result.errors));
         }
-        if (result.data.id !== undefined) {
+        if ((stored as Record<string, unknown>)[pk] === undefined && result.data.id !== undefined) {
           (stored as Record<string, unknown>)[pk] = result.data.id;
         }
         this.attributes = castOut(stored, casts) as Row;
