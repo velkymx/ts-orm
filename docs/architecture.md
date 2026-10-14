@@ -1,5 +1,11 @@
 # Architecture
 
+This page explains why ts-orm is built the way it is. For how to use each
+feature, start with [Getting started](getting-started.md) and the task
+guides it links: [Queries](queries.md), [Models](models.md),
+[Relations](relations.md), [Transactions](transactions.md), and
+[Schema and migrations](schema-and-migrations.md).
+
 ## Design decisions
 
 - Struct is the single source of truth. One declaration drives row
@@ -156,11 +162,12 @@ never fail the write, so a committed write is never reported as
 rolled back. Delivery is best-effort with no retry or durability; use
 an outbox for crash-durable needs.
 
-`afterCreate` and `afterUpdate` mean after the write commits (or after
-the autocommitted write on plain drivers), never merely after the SQL
-runs inside an open transaction. The CRUD functions never dispatch, so
-`Model.save` carries lifecycle behavior while lower-level CRUD calls
-stay side-effect free; never expect hooks from a CRUD call.
+The after-hooks (`created`, `updated`, `saved`, and the delete and
+restore pairs) mean after the write commits, or after the autocommitted
+write on a plain driver, never merely after the SQL runs inside an open
+transaction. The CRUD functions never dispatch, so `Model.save` carries
+lifecycle behavior while lower-level CRUD calls stay side-effect free;
+never expect hooks from a CRUD call.
 
 Timestamps are built-in hooks, not inline writes: `creating` fills
 `created_at` when the column exists and no value was given, `updating`

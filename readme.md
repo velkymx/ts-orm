@@ -1,56 +1,54 @@
 # ts-orm
 
-A lightweight, type-safe TypeScript ORM. Declare each table once as a
-struct, then use the same code against MySQL, Postgres, SQLite, or MSSQL.
-Values are always bound, identifiers always validated, errors always safe.
-
-## Quick start
+A small, type-safe TypeScript ORM. Declare each table once as a struct, then run the same code against MySQL, Postgres, SQLite, or SQL Server. Values are always bound, identifiers are always validated, and errors come back safe.
 
 ```bash
 npm i @velkymx/ts-orm
 ```
 
+## A first taste
+
+This runs as written on Node 24 or later, using the built-in SQLite driver and an in-memory database.
+
 ```ts
 import { defineStruct, createSqliteDriver, create, read } from '@velkymx/ts-orm';
 
 const driver = createSqliteDriver({ filename: ':memory:' });
+
 const User = defineStruct('users', {
   id: { type: 'number', required: true, default: 'auto_increment' },
   name: { type: 'string', required: true, length: 50 },
 });
 
 await driver.execute('CREATE TABLE "users" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT)', []);
+
 await create(driver, User, { name: 'Ada' });
-console.log(await read(driver, User, {}));
+
+const users = await read(driver, User);
+console.log(users.data); // [{ id: 1, name: 'Ada' }]
+
 await driver.close();
 ```
 
-## Core features
+The struct is the only schema you write. The row type, the insert type, and the update type are inferred from it, so your editor knows `name` is a string and `id` is a number without a second declaration.
 
-- Struct-first schemas with inferred row, insert, and update types
-- Fluent query builder: operators, `IN`, `BETWEEN`, `LIKE`, `AND`/`OR` groups, paging, `COUNT`
-- Model base class with dirty-tracked saves and transactions
-- Relations with batched eager loading plus dependent deletes
-- Model lifecycle hooks with transaction-aware delivery
-- Multi-engine drivers sharing one `Driver` contract
-- Transactions with auto commit/rollback plus disposable handles
-- Validation-first writes and a sanitized, injectable-logger error route
+## What you get
 
-## CLI
+The struct drives four layers that share one set of types. Direct CRUD functions (`create`, `read`, `update`, `remove`) handle one-call reads and writes. A fluent query builder covers operators, `OR` groups, `IN`, `BETWEEN`, `LIKE`, paging, and aggregates. A model base class adds dirty tracking, lifecycle hooks, attribute casts, automatic timestamps, and soft deletes. Relations load related rows in batched queries. Transactions commit on success and roll back on a throw. A schema builder and migration runner sit behind the `ts-orm` CLI.
 
-Generate a struct field map from a live MySQL table:
+Every write validates against the struct before it reaches the database, and every driver failure maps to a safe client message while the full detail goes to a logger you control.
+
+## The CLI
+
+Read a live MySQL table into a struct field map:
 
 ```bash
 npx ts-orm struct users
 ```
 
-It reads the table through the shared connection (set `DB_HOST`, `DB_USER`,
-`DB_DATABASE`, and optionally `DB_PASSWORD` and `DB_PORT`) and writes the
-mapped fields to `./users.json`. Fold that output into `defineStruct` to
-declare the model. On an invalid table name or a connection failure it prints
-a message and exits non-zero.
+It connects through the environment (`DB_HOST`, `DB_USER`, `DB_DATABASE`, and optionally `DB_PASSWORD` and `DB_PORT`) and writes the mapped fields to `./users.json`, ready to fold into `defineStruct`. On a bad table name or a failed connection it prints a message and exits non-zero.
 
-Migrations version the schema from code:
+Version the schema from code:
 
 ```bash
 npx ts-orm make:migration add_posts
@@ -58,32 +56,26 @@ npx ts-orm migrate
 npx ts-orm migrate:rollback
 ```
 
-`make:migration` scaffolds a timestamped `up`/`down` file in
-`./migrations`. `migrate` applies pending files oldest first and records
-them in `tsorm_migrations`, so reruns apply nothing. `migrate:rollback`
-reverses the latest batch. Build the statements with the schema builder
-(`buildCreateTable`, `buildAddColumn`, `buildCreateIndex`, ...) or fold a
-struct with `structColumns`; see `examples/migrations.mjs`.
+[Schema and migrations](docs/schema-and-migrations.md) covers the runner and the schema builder in full.
 
-## Docs
+## Documentation
 
-- [Getting started](docs/getting-started.md): installation, configuration, first model, first query
-- [Architecture](docs/architecture.md): design decisions, query execution, metadata, drivers
-- [Security](#security): guarantees plus app responsibilities, below
-- [Contributing](CONTRIBUTING.md): setup, testing, pull requests, releases
+Read these in order the first time:
 
-Runnable examples live in [examples/](examples/); each runs against the
-published barrel (`dist/index.js`, rebuild with `npm run build` first).
+1. [Getting started](docs/getting-started.md): install, configure, your first model, your first query.
+2. [Queries](docs/queries.md): the query builder, from one condition to grouped logic and pagination.
+3. [Models](docs/models.md): instances, dirty tracking, hooks, timestamps, casts, and soft deletes.
+4. [Relations](docs/relations.md): hasMany, belongsTo, many-to-many, polymorphic, and eager loading.
+5. [Transactions](docs/transactions.md): the callback form, manual handles, and how hooks defer to commit.
+6. [Schema and migrations](docs/schema-and-migrations.md): the schema builder, the runner, and the CLI.
+7. [Architecture](docs/architecture.md): the design decisions and the driver seam, for contributors.
 
-## Security
-
-- Identifiers pass an allowlist and are quoted per dialect; all values bound
-- Payloads validate against structs before writes
-- Driver errors map to safe messages; detail goes to the injectable logger
-- Search input: prefer `whereLike`, which escapes `%` and `_`; raw `LIKE` keeps wildcard power by intent
-- The library does not do auth, body limits, or output encoding; those stay with the app
+Runnable versions of every example live in [examples/](examples/). Build once with `npm run build`, then run any file, for example `node examples/basic-crud.mjs`.
 
 ## Requirements
 
-Node 24 or later (the SQLite driver uses the built-in `node:sqlite`).
-MySQL via `mysql2`; Postgres via `pg` and MSSQL via `mssql` as optional peers.
+Node 24 or later. The SQLite driver uses the built-in `node:sqlite`, so it needs no extra package. MySQL rides on the bundled `mysql2`. Postgres (`pg`) and SQL Server (`mssql`) are optional peers, installed only for the engines you use.
+
+## Security
+
+Identifiers pass an allowlist and are quoted per dialect; values are always bound, never interpolated. Payloads validate against the struct before any write. Driver errors map to safe messages, and detail goes to an injectable logger. For search input prefer `whereLike`, which escapes `%` and `_`; raw `LIKE` keeps wildcard power when you ask for it. The library does not handle authentication, request body limits, or output encoding; those stay with your application.
