@@ -298,6 +298,9 @@ export function buildUpdate<Table extends string, F extends Fields>(
   idKey: string,
 ): BuiltStatement {
   const names = updatableColumns(struct.fields, payload, idKey);
+  if (names.length === 0) {
+    throw new Error('buildUpdate needs at least one column to set');
+  }
   const assignments = names
     .map((name, i) => `${safeIdentifier(name, dialect, 'column name')} = ${dialect.placeholder(i + 1)}`)
     .join(', ');
