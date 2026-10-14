@@ -5,7 +5,7 @@
  */
 
 import type { Dialect } from './dialect.js';
-import { safeIdentifier } from './identifiers.js';
+import { safeIdentifier, safeQualified } from './identifiers.js';
 import type { BindValue, Driver } from './driver.js';
 import type { Fields, InsertOf, RowOf, Struct, UpdateOf } from './struct.js';
 import { validatePayload } from './validation.js';
@@ -120,6 +120,82 @@ export async function read<Table extends string, F extends Fields>(
     const { sql, params } = buildSelect(driver.dialect, struct, conditions, options);
     const rows = await driver.query<RowOf<F>>(sql, params);
     return ok(rows, 'Data retrieved');
+  } catch (error) {
+    return fail('Database operation failed', [(error as Error).message]);
+  }
+}
+
+/** A join: how to attach another table to the main one. */
+export interface JoinSpec {
+  readonly type?: 'inner' | 'left' | 'right';
+  readonly table: string;
+  /** Qualified columns to match: [leftTable.col, rightTable.col]. */
+  readonly on: readonly [string, string];
+}
+
+/** Build a SELECT with joins, main-table-qualified conditions, and order/limit. */
+export function buildSelectWith<Table extends string, F extends Fields>(
+  dialect: Dialect,
+  struct: Struct<Table, F>,
+  joins: readonly JoinSpec[],
+  conditions: Record<string, unknown>,
+  options: ReadOptions,
+): BuiltStatement {
+  const table = safeIdentifier(struct.table, dialect, 'table name');
+
+  const joinClause = joins
+    .map((join) => {
+      const type = (join.type ?? 'inner').toUpperCase();
+      const joinTable = safeIdentifier(join.table, dialect, 'join table name');
+      const left = safeQualified(join.on[0], dialect, 'join condition');
+      const right = safeQualified(join.on[1], dialect, 'join condition');
+      return `${type} JOIN ${joinTable} ON ${left} = ${right}`;
+    })
+    .join(' ');
+
+  const keys = Object.keys(conditions);
+  const params = keys.map((key) => conditions[key] as BindValue);
+  const where = keys.length
+    ? ` WHERE ${keys
+        .map(
+          (key, i) =>
+            `${table}.${safeIdentifier(key, dialect, 'column name')} = ${dialect.placeholder(i + 1)}`,
+        )
+        .join(' AND ')}`
+    : '';
+
+  let orderClause = options.orderBy
+    ? `ORDER BY ${safeIdentifier(options.orderBy, dialect, 'order by column')} ${
+        options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'
+      }`
+    : '';
+
+  const limitClause = dialect.limitOffset(toCount(options.limit), toCount(options.offset));
+  if (dialect.name === 'mssql' && limitClause && !orderClause) {
+    orderClause = 'ORDER BY (SELECT NULL)';
+  }
+
+  let sql = `SELECT * FROM ${table}`;
+  if (joinClause) sql += ` ${joinClause}`;
+  sql += where;
+  if (orderClause) sql += ` ${orderClause}`;
+  if (limitClause) sql += ` ${limitClause}`;
+
+  return { sql, params };
+}
+
+/** Read rows across one or more joins. Row shape is caller-specified. */
+export async function readWith<Row = Record<string, unknown>>(
+  driver: Driver,
+  struct: Struct<string, Fields>,
+  joins: readonly JoinSpec[],
+  conditions: Record<string, unknown> = {},
+  options: ReadOptions = {},
+): Promise<Result<Row[]>> {
+  try {
+    const { sql, params } = buildSelectWith(driver.dialect, struct, joins, conditions, options);
+    const rows = await driver.query<Row>(sql, params);
+    return ok(rows, 'Data retrieved with join');
   } catch (error) {
     return fail('Database operation failed', [(error as Error).message]);
   }
