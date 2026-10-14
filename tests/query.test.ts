@@ -58,6 +58,13 @@ describe('query builder operators', () => {
     });
   });
 
+  it('rejects operators outside the allowlist instead of interpolating them', () => {
+    expect(() => query(fakeDriver(), User).where('age', 'IS NOT NULL OR 1=1 --' as never, 0)).toThrow(
+      /operator/i,
+    );
+    expect(() => query(fakeDriver(), User).orWhere('age', 'DROP' as never, 1)).toThrow(/operator/i);
+  });
+
   it('whereIn expands placeholders, empty IN is always false', () => {
     expect(query(fakeDriver(), User).whereIn('role', ['admin', 'staff']).toSQL()).toEqual({
       sql: 'SELECT * FROM `users` WHERE `role` IN (?, ?)',
