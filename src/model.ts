@@ -18,6 +18,7 @@ import {
   remove,
 } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
+import { getDefaultDriver } from './default-driver.js';
 import { deliver, runHooks, timestampHooks, type HookContext, type ModelHooks } from './lifecycle.js';
 import { castIn, castOut, valuesEqual, type Casts } from './casts.js';
 import { isTrashed, softColumnOf, softStamp } from './soft.js';
@@ -104,11 +105,30 @@ export interface ScopedReads<Table extends string, F extends Fields, T> {
 /**
  * Bind a driver plus a struct into an extendable model class. Extend the
  * result to add domain methods; every method stays typed by the struct.
+ * Pass the struct first to use the shared environment driver; pass an
+ * explicit driver (either position) to override it, e.g. per test or tx.
  */
 export function defineModel<Table extends string, F extends Fields>(
   driver: Driver,
   struct: Struct<Table, F>,
+): ModelStatic<Table, F>;
+export function defineModel<Table extends string, F extends Fields>(
+  struct: Struct<Table, F>,
+  driver?: Driver,
+): ModelStatic<Table, F>;
+export function defineModel<Table extends string, F extends Fields>(
+  first: Driver | Struct<Table, F>,
+  second?: Driver | Struct<Table, F>,
 ): ModelStatic<Table, F> {
+  const isStruct = (value: unknown): value is Struct<Table, F> =>
+    typeof value === 'object' &&
+    value !== null &&
+    'table' in value &&
+    'fields' in value;
+  const driver = isStruct(first)
+    ? ((second as Driver | undefined) ?? getDefaultDriver())
+    : (first as Driver);
+  const struct = (isStruct(first) ? first : second) as Struct<Table, F>;
   type Row = RowOf<F>;
   const pk = primaryKey(struct.fields);
   const key = pk as keyof F & string;

@@ -4,12 +4,10 @@ A model binds one driver and one struct into a class. You get static finders, in
 
 ## Define a model
 
-Call `defineModel(driver, struct)` and extend the result. The base class gives you the static and instance methods; your subclass adds whatever domain logic you want:
+Call `defineModel(User)` and extend the result. The struct-first form is canonical: the model binds the shared environment driver, captured once from `DB_*` at first use and reused by every model. The base class gives you the static and instance methods; your subclass adds whatever domain logic you want:
 
 ```ts
-import { defineStruct, createSqliteDriver, defineModel } from '@velkymx/ts-orm';
-
-const driver = createSqliteDriver({ filename: ':memory:' });
+import { defineStruct, defineModel } from '@velkymx/ts-orm';
 
 const User = defineStruct('users', {
   id: { type: 'number', required: true, default: 'auto_increment' },
@@ -17,13 +15,15 @@ const User = defineStruct('users', {
   age: { type: 'number' },
 });
 
-class AppUser extends defineModel(driver, User) {
+class AppUser extends defineModel(User) {
   display() {
     const row = this.toRow();
     return `${row.name} (${row.age})`;
   }
 }
 ```
+
+Override the driver by passing it explicitly, either as `defineModel(User, driver)` or the legacy `defineModel(driver, User)` order, both still supported. The later examples on this page pass an explicit in-memory driver so each section runs in isolation. Inside a transaction, pass the tx handle per call (`AppUser.find(1, tx)`), or the read silently runs outside the transaction.
 
 ## Create, find, and list
 

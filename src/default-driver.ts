@@ -29,3 +29,26 @@ export function createDefaultDriver(): Driver {
       );
   }
 }
+
+let cached: Driver | null = null;
+
+/**
+ * Process-wide shared default driver, created once from the environment.
+ * Memoized (not constructed per call) because some engines hand out a
+ * distinct handle per factory product: two products would be two databases.
+ */
+export function getDefaultDriver(): Driver {
+  if (!cached) {
+    cached = createDefaultDriver();
+  }
+  return cached;
+}
+
+/**
+ * Forget the cached default so the next `getDefaultDriver()` rereads the
+ * environment. Primarily for tests; resetting does not close the previous
+ * driver, so the caller owns closing it before resetting in production code.
+ */
+export function resetDefaultDriver(): void {
+  cached = null;
+}
