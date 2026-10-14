@@ -63,6 +63,7 @@ export function createMysqlDriver(): Driver {
         conn.release();
         throw mapMysqlError(error);
       }
+      let settled = false;
       return {
         dialect: mysqlDialect,
 
@@ -88,10 +89,12 @@ export function createMysqlDriver(): Driver {
 
         async commit(): Promise<void> {
           await conn.commit();
+          settled = true;
         },
 
         async rollback(): Promise<void> {
           await conn.rollback();
+          settled = true;
         },
 
         async release(): Promise<void> {
@@ -99,7 +102,14 @@ export function createMysqlDriver(): Driver {
         },
 
         async [Symbol.asyncDispose](): Promise<void> {
-          conn.release();
+          try {
+            if (!settled) {
+              await conn.rollback();
+              settled = true;
+            }
+          } finally {
+            conn.release();
+          }
         },
       };
     },

@@ -46,4 +46,10 @@ export interface TxConnection extends Driver {
   rollback(): Promise<void>;
   /** Return the connection to the pool. Runs after commit or rollback. */
   release(): Promise<void>;
+  /**
+   * AsyncDisposable hook: rolls back when neither commit nor rollback ran,
+   * then releases. Bare `await using` on a raw connection is therefore
+   * safe, but TxHandle stays the preferred path.
+   */
+  [Symbol.asyncDispose](): Promise<void>;
 }
