@@ -8,36 +8,27 @@ npm i @velkymx/ts-orm
 
 ## A first taste
 
-Import plus environment is the whole setup. `createDefaultDriver()` reads the engine and connection settings from the environment, loading a `.env` file automatically, so there is no `configure` call and no driver to pick by hand.
-
-```bash
-# .env
-DB_DIALECT=sqlite   # mysql, postgres, sqlite, or mssql; defaults to mysql
-```
+Declare a table, then read a record. Connection settings come from the environment, so there is no setup code.
 
 ```ts
-import { defineStruct, createDefaultDriver, create, read } from '@velkymx/ts-orm';
-
-const driver = createDefaultDriver();
+import { defineStruct, createDefaultDriver, readOne } from '@velkymx/ts-orm';
 
 const User = defineStruct('users', {
   id: { type: 'number', required: true, default: 'auto_increment' },
   name: { type: 'string', required: true, length: 50 },
 });
 
-await driver.execute('CREATE TABLE "users" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT)', []);
-
-await create(driver, User, { name: 'Ada' });
-
-const users = await read(driver, User);
-console.log(users.data); // [{ id: 1, name: 'Ada' }]
-
-await driver.close();
+const user = await readOne(createDefaultDriver(), User, { id: 1 });
 ```
 
-With `DB_DIALECT=sqlite` this runs as written on Node 24 or later against an in-memory database (set `DB_FILE` to use a file instead). Switching engines is a one-line environment change, not a code change.
+Every operation returns the same envelope, discriminated on `success`:
 
-The struct is the only schema you write. The row type, the insert type, and the update type are inferred from it, so your editor knows `name` is a string and `id` is a number without a second declaration.
+```ts
+console.log(user);
+// { success: true, message: 'Record found', data: { id: 1, name: 'Ada' } }
+```
+
+Check `success`, then read `data` (the row, typed from the struct) or `errors`. The struct is the only schema you write; the row type is inferred from it, so `user.data.name` is known to be a string.
 
 ## What you get
 
