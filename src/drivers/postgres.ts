@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { postgres as postgresDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
-import { OrmError, type OrmErrorCode } from '../errors.js';
+import { OrmError, logError, type OrmErrorCode } from '../errors.js';
 
 const CODES: Record<string, OrmErrorCode> = {
   '23505': 'duplicate',
@@ -47,12 +47,13 @@ function peer(): typeof pg {
   return pgLib;
 }
 
-/** Supply explicit configuration, overriding the environment. Resets the pool. */
+/** Supply explicit configuration, overriding the environment. Resets the pool. Reconfigure only when quiescent; the old pool drains in the background with failures logged. */
 export function configurePostgres(config: Partial<DbConfig>): void {
   overrides = config;
   if (pool) {
-    void pool.end();
+    const old = pool;
     pool = null;
+    old.end().catch((error: unknown) => logError('postgres pool shutdown failed', error));
   }
 }
 

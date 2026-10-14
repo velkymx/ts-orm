@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { configure, getPool, closePool } from '../src/connection.js';
+import { setLogger, resetLogger } from '../src/errors.js';
 
 afterEach(async () => {
   await closePool();
@@ -23,5 +24,24 @@ describe('connection manager', () => {
     await closePool();
     const second = getPool();
     expect(second).not.toBe(first);
+  });
+
+  it('logs shutdown failures on reconfigure instead of rejecting unobserved', async () => {
+    configure({ host: 'localhost', user: 'u', password: '', database: 'd' });
+    const first = getPool();
+    const logged: unknown[] = [];
+    setLogger((_message, detail) => logged.push(detail));
+    const failure = new Error('shutdown boom');
+    (first as unknown as { end: () => Promise<void> }).end = async () => {
+      throw failure;
+    };
+    try {
+      configure({ host: 'other', user: 'u', password: '', database: 'd' });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(logged).toContain(failure);
+      expect(getPool()).not.toBe(first);
+    } finally {
+      resetLogger();
+    }
   });
 });

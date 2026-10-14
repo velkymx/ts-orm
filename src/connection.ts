@@ -6,19 +6,23 @@
 
 import { createPool, type Pool } from 'mysql2/promise';
 import { resolveConfig, type DbConfig } from './config.js';
+import { logError } from './errors.js';
 
 let pool: Pool | null = null;
 let overrides: Partial<DbConfig> | null = null;
 
 /**
  * Supply explicit configuration, overriding the environment. Resets any
- * existing pool so the next `getPool` picks up the new settings.
+ * existing pool so the next `getPool` picks up the new settings. The old
+ * pool drains in the background with failures logged, never unobserved;
+ * reconfigure only when quiescent, since in-flight work keeps its pool.
  */
 export function configure(config: Partial<DbConfig>): void {
   overrides = config;
   if (pool) {
-    void pool.end();
+    const old = pool;
     pool = null;
+    old.end().catch((error: unknown) => logError('mysql pool shutdown failed', error));
   }
 }
 
