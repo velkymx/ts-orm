@@ -19,7 +19,7 @@ export interface BuiltStatement {
 }
 
 /** Single error route: run an operation, converting any throw to a safe failure. */
-async function guarded<T>(
+export async function guarded<T>(
   operation: string,
   fn: () => Promise<Result<T>>,
 ): Promise<Result<T>> {
@@ -215,13 +215,11 @@ export async function readWith<Row = Record<string, unknown>>(
   conditions: Record<string, unknown> = {},
   options: ReadOptions = {},
 ): Promise<Result<Row[]>> {
-  try {
+  return guarded('read', async () => {
     const { sql, params } = buildSelectWith(driver.dialect, struct, joins, conditions, options);
     const rows = await driver.query<Row>(sql, params);
     return ok(rows, 'Data retrieved with join');
-  } catch (error) {
-    return fail('Database operation failed', [(error as Error).message]);
-  }
+  });
 }
 
 /** Thrown by findOrFail when no row matches. */

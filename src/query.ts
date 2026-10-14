@@ -7,9 +7,10 @@
 import type { Dialect } from './dialect.js';
 import { safeIdentifier, escapeLike } from './identifiers.js';
 import type { BuiltStatement } from './crud.js';
+import { guarded } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
 import type { Fields, RowOf, Struct } from './struct.js';
-import { ok, fail, type Result } from './result.js';
+import { ok, type Result } from './result.js';
 
 /** Comparison operators accepted by where and orWhere. */
 export type ComparisonOperator =
@@ -437,13 +438,11 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
   async get(this: QueryBuilder<Table, F>): Promise<Result<RowOf<F>[]>>;
   async get(): Promise<Result<SelectedRow<F, S>[]>>;
   async get(): Promise<Result<RowOf<F>[]>> {
-    try {
+    return guarded('query', async () => {
       const { sql, params } = this.toSQL();
       const rows = await this.driver.query<RowOf<F>>(sql, params);
       return ok(rows, 'Data retrieved');
-    } catch (error) {
-      return fail('Database operation failed', [(error as Error).message]);
-    }
+    });
   }
 
   /** Execute with limit 1 and return the first row or null. */
@@ -460,20 +459,18 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
 
   /** Execute COUNT over the current filters and return the total. */
   async count(column: (keyof F & string) | '*' = '*'): Promise<Result<number>> {
-    try {
+    return guarded('query', async () => {
       const { sql, params } = this.toCountSQL(column);
       const rows = await this.driver.query<Record<string, unknown>>(sql, params);
       const first = rows[0];
       const value = first ? first['count'] : 0;
       return ok(Number(value), 'Count retrieved');
-    } catch (error) {
-      return fail('Database operation failed', [(error as Error).message]);
-    }
+    });
   }
 
   /** Run one aggregate and return its value, or null when no rows match. */
   private async aggregate(fn: AggregateFn, column: keyof F & string): Promise<Result<number | null>> {
-    try {
+    return guarded('query', async () => {
       const { sql, params } = this.toAggregateSQL(fn, column);
       const rows = await this.driver.query<Record<string, unknown>>(sql, params);
       const value = rows[0]?.[fn.toLowerCase()];
@@ -481,9 +478,7 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
         return ok(null, `${fn} retrieved`);
       }
       return ok(Number(value), `${fn} retrieved`);
-    } catch (error) {
-      return fail('Database operation failed', [(error as Error).message]);
-    }
+    });
   }
 
   /** Sum a column over the current filters, or null when no rows match. */
@@ -548,13 +543,11 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
 
   /** Execute DELETE over the current filters and return the affected rows. */
   async delete(): Promise<Result<{ affectedRows: number }>> {
-    try {
+    return guarded('query', async () => {
       const { sql, params } = this.toDeleteSQL();
       const result = await this.driver.execute(sql, params);
       return ok({ affectedRows: result.affectedRows }, 'Records deleted');
-    } catch (error) {
-      return fail('Database operation failed', [(error as Error).message]);
-    }
+    });
   }
 }
 
