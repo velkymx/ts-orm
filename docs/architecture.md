@@ -211,7 +211,8 @@ no-event rule for bulk paths. Soft paths never touch `updated_at` and
 compose with `datetime` casts on `deleted_at`. `Model.delete` never
 cascades; compose `deleteRelated` explicitly for the child contract.
 
-No savepoint nesting: each `transaction` call checks out an
-independent connection and commits independently. Concurrent nesting on
-single-connection drivers fails at the engine; pool drivers commit the
-inner transaction even if the caller later rolls back its own.
+No savepoint nesting on pooled drivers: each `transaction` call checks out an
+independent connection and commits independently. SQLite nests inner calls as
+savepoints instead, and serializes top-level transactions and ordinary
+operations around its single handle, so concurrent work waits rather than
+sharing state. Inside a transaction callback, use only the tx handle.
