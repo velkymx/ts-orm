@@ -17,7 +17,7 @@ import {
   remove,
 } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
-import { deliver, runHooks, type HookContext, type ModelHooks } from './lifecycle.js';
+import { deliver, runHooks, timestampHooks, type HookContext, type ModelHooks } from './lifecycle.js';
 import { QueryBuilder, query } from './query.js';
 import type { Fields, InsertOf, RowOf, Struct } from './struct.js';
 
@@ -56,6 +56,8 @@ export interface ModelStatic<Table extends string, F extends Fields> {
   create<T>(this: new (data?: Partial<RowOf<F>>) => T, payload: InsertOf<F>, driver?: Driver): Promise<T>;
   /** Per-model hook table. Absent means the lifecycle passes through silently. */
   readonly hooks?: ModelHooks<F>;
+  /** Automatic created_at and updated_at handling. Set false to opt out. */
+  readonly timestamps?: boolean;
   /** Delete rows matching equality conditions in one statement. */
   deleteWhere(conditions: Partial<RowOf<F>>, driver?: Driver): Promise<{ affectedRows: number }>;
   /** Fluent builder over this model table, rows come back unhydrated. */
@@ -83,6 +85,16 @@ export function defineModel<Table extends string, F extends Fields>(
     return (ctor as { hooks?: ModelHooks<F> }).hooks;
   }
 
+  function stampsOf(ctor: unknown): ModelHooks<F> | undefined {
+    const flag = (ctor as { timestamps?: boolean }).timestamps ?? true;
+    return flag ? timestampHooks(struct) : undefined;
+  }
+
+  /** Live-attribute context for before-hooks, so stamps and custom defaults flow downstream. */
+  function live(attributes: Row, changes: Partial<Row>): HookContext<F> {
+    return { attributes, changes };
+  }
+
   function context(attributes: Row, changes: Partial<Row>): HookContext<F> {
     return { attributes: { ...attributes }, changes: { ...changes } };
   }
@@ -91,6 +103,7 @@ export function defineModel<Table extends string, F extends Fields>(
     static readonly boundDriver: Driver = driver;
     static readonly boundStruct: Struct<Table, F> = struct;
     static hooks: ModelHooks<F> | undefined = undefined;
+    static timestamps: boolean = true;
 
     protected attributes: Row;
     protected original: Row;
@@ -145,18 +158,21 @@ export function defineModel<Table extends string, F extends Fields>(
     ): Promise<T> {
       const target = pick(drv);
       const hooks = hooksOf(this);
-      await runHooks(hooks, 'saving', context(payload as Row, payload as Partial<Row>));
-      await runHooks(hooks, 'creating', context(payload as Row, payload as Partial<Row>));
-      const result = await createRow(target, struct, payload);
+      const stamps = stampsOf(this);
+      const attrs = { ...(payload as Partial<Row>) };
+      await runHooks(hooks, 'saving', context(attrs as Row, attrs as Partial<Row>));
+      await runHooks(hooks, 'creating', context(attrs as Row, attrs as Partial<Row>));
+      await runHooks(stamps, 'creating', live(attrs as Row, attrs as Partial<Row>));
+      const result = await createRow(target, struct, attrs as InsertOf<F>);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
-      const row = { ...(payload as Partial<Row>) };
+      const row = { ...attrs };
       if (result.data.id !== undefined) {
         (row as Record<string, unknown>)[pk] = result.data.id;
       }
       const instance = this.hydrate(row as Row);
-      await deliver(target, hooks, ['created', 'saved'], context(row as Row, payload as Partial<Row>));
+      await deliver(target, hooks, ['created', 'saved'], context(row as Row, attrs as Partial<Row>));
       return instance;
     }
 
@@ -220,10 +236,12 @@ export function defineModel<Table extends string, F extends Fields>(
     async save(drv?: Driver): Promise<this> {
       const target = pick(drv);
       const hooks = hooksOf(this.constructor);
+      const stamps = stampsOf(this.constructor);
       const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
       if (id === undefined || id === null) {
-        await runHooks(hooks, 'saving', context(this.attributes, this.attributes));
-        await runHooks(hooks, 'creating', context(this.attributes, this.attributes));
+        await runHooks(hooks, 'saving', live(this.attributes, this.attributes));
+        await runHooks(hooks, 'creating', live(this.attributes, this.attributes));
+        await runHooks(stamps, 'creating', live(this.attributes, this.attributes));
         const result = await createRow(target, struct, this.attributes as InsertOf<F>);
         if (!result.success) {
           throw new Error(failMessage(result.message, result.errors));
@@ -235,12 +253,14 @@ export function defineModel<Table extends string, F extends Fields>(
         await deliver(target, hooks, ['created', 'saved'], context(this.attributes, this.attributes));
         return this;
       }
-      const changes = this.getChanges();
-      if (Object.keys(changes).length === 0) {
+      if (!this.isDirty()) {
         return this;
       }
-      await runHooks(hooks, 'saving', context(this.attributes, changes));
-      await runHooks(hooks, 'updating', context(this.attributes, changes));
+      const pending = this.getChanges();
+      await runHooks(hooks, 'saving', live(this.attributes, pending));
+      await runHooks(hooks, 'updating', live(this.attributes, pending));
+      await runHooks(stamps, 'updating', live(this.attributes, pending));
+      const changes = this.getChanges();
       const { sql, params } = buildUpdate(target.dialect, struct, {
         ...(changes as Record<string, unknown>),
         [pk]: id,

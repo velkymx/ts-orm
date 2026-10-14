@@ -10,7 +10,7 @@
 
 import type { Driver, TxConnection } from './driver.js';
 import { logError } from './errors.js';
-import type { Fields, RowOf } from './struct.js';
+import type { Fields, RowOf, Struct } from './struct.js';
 
 /** Hook names in execution order per operation. */
 export type HookName =
@@ -45,6 +45,40 @@ export async function runHooks<F extends Fields>(
   if (fn) {
     await fn(ctx);
   }
+}
+
+/**
+ * Current UTC time as `YYYY-MM-DD HH:MM:SS`, matching datetime validation.
+ */
+export function timestampNow(): string {
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
+ * Built-in timestamp hooks for a struct. creating fills created_at when
+ * the column exists and no value was given, updating always refreshes
+ * updated_at when the column exists. Mutates the live attributes so later
+ * validation and change computation observe the stamps.
+ */
+export function timestampHooks<F extends Fields>(struct: Struct<string, Fields>): ModelHooks<F> {
+  const names = Object.keys(struct.fields);
+  const created = names.includes('created_at') ? 'created_at' : undefined;
+  const updated = names.includes('updated_at') ? 'updated_at' : undefined;
+  return {
+    creating: (ctx) => {
+      if (created) {
+        const attributes = ctx.attributes as Record<string, unknown>;
+        if (attributes[created] === undefined || attributes[created] === null) {
+          attributes[created] = timestampNow();
+        }
+      }
+    },
+    updating: (ctx) => {
+      if (updated) {
+        (ctx.attributes as Record<string, unknown>)[updated] = timestampNow();
+      }
+    },
+  };
 }
 
 /** True when the driver is a checked-out transaction connection. */

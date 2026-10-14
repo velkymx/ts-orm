@@ -116,6 +116,12 @@ runs inside an open transaction. The CRUD functions never dispatch, so
 `Model.save` carries lifecycle behavior while lower-level CRUD calls
 stay side-effect free; never expect hooks from a CRUD call.
 
+Timestamps are built-in hooks, not inline writes: `creating` fills
+`created_at` when the column exists and no value was given, `updating`
+always refreshes `updated_at` when it exists. Presence gates each
+column, `static timestamps = false` opts out, and no-op saves stay
+silent.
+
 No savepoint nesting: each `transaction` call checks out an
 independent connection and commits independently. Concurrent nesting on
 single-connection drivers fails at the engine; pool drivers commit the
