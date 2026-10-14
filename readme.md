@@ -30,6 +30,7 @@ await driver.close();
 - Struct-first schemas with inferred row, insert, and update types
 - Fluent query builder: operators, `IN`, `BETWEEN`, `LIKE`, `AND`/`OR` groups, paging, `COUNT`
 - Model base class with dirty-tracked saves and transactions
+- Relations with batched eager loading plus dependent deletes
 - Multi-engine drivers sharing one `Driver` contract
 - Transactions with auto commit/rollback plus disposable handles
 - Validation-first writes and a sanitized, injectable-logger error route

@@ -69,6 +69,18 @@ export { TransactionNotSupportedError, TxHandle, beginTransaction, transaction }
 export type { ModelInstance, ModelStatic } from './model.js';
 export { defineModel } from './model.js';
 
+export type {
+  RelationKind,
+  HasOne,
+  HasMany,
+  BelongsTo,
+  BelongsToMany,
+  MorphMany,
+  Relation,
+  Loaded,
+} from './relations.js';
+export { hasOne, hasMany, belongsTo, belongsToMany, morphMany, load, loadOne, deleteRelated } from './relations.js';
+
 export { createMysqlDriver } from './drivers/mysql.js';
 export { mapMysqlError } from './drivers/mysql.js';
 export { configurePostgres, createPostgresDriver } from './drivers/postgres.js';
