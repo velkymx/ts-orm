@@ -71,6 +71,8 @@ export { defineModel } from './model.js';
 
 export type { HookName, HookContext, HookFn, ModelHooks } from './lifecycle.js';
 export { runHooks, isTransaction, afterCommit, drainAfterCommit, deliver, timestampNow, timestampHooks } from './lifecycle.js';
+export type { CastType, Casts } from './casts.js';
+export { CastError, castIn, castOut, valuesEqual } from './casts.js';
 
 export type {
   RelationKind,
