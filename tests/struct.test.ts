@@ -74,6 +74,20 @@ describe('defineStruct runtime shape', () => {
   it('exposes column name keys', () => {
     expect(Object.keys(User.fields)).toEqual(['id', 'email', 'age', 'role', 'created_at']);
   });
+
+  it('input mutation after definition cannot alter the struct', () => {
+    const input = {
+      name: { type: 'string' as const, required: true },
+      role: { type: 'enum' as const, enum: ['admin', 'user'] },
+    };
+    const S = defineStruct('t', input);
+    (input as Record<string, unknown>).name = { type: 'number' };
+    (input.role.enum as string[]).push('root');
+    expect(S.fields.name).toEqual({ type: 'string', required: true });
+    expect(S.fields.role.enum).toEqual(['admin', 'user']);
+    expect(Object.isFrozen(S.fields)).toBe(true);
+    expect(Object.isFrozen(S.fields.role.enum)).toBe(true);
+  });
 });
 
 describe('type-level inference', () => {
