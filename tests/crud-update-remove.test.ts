@@ -22,6 +22,10 @@ describe('buildUpdate', () => {
       params: ['x', 1],
     });
   });
+
+  it('throws on empty column sets instead of emitting SET WHERE', () => {
+    expect(() => buildUpdate(mysql, User, { id: 1 }, 'id')).toThrow(/at least one column/i);
+  });
 });
 
 describe('buildDelete', () => {
