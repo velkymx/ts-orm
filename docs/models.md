@@ -91,6 +91,8 @@ A create fires `saving`, then `creating`, then the insert, then `created`, then 
 
 The direct CRUD functions never fire hooks. Bulk paths like `deleteWhere` and relation deletes are also hook-free. Hooks are a model concern only.
 
+Before-hooks receive the live attributes, not a copy. Anything a `saving`, `creating`, or `updating` hook writes to `ctx.attributes` flows straight into validation, the dirty change set, and the SQL. This is deliberate, the built-in timestamp hooks use it to stamp `created_at` and `updated_at`, but it means a careless assignment in a before-hook persists. Treat before-hooks as middleware that can shape the write. After-hooks (`created`, `updated`, `saved`, and the delete and restore pairs) receive a snapshot copy instead, so they observe the write without changing it.
+
 ## Automatic timestamps
 
 If the struct has `created_at` or `updated_at` columns, the model fills them for you. `created_at` is set on insert when you did not supply one; `updated_at` is refreshed on every update:
@@ -138,6 +140,8 @@ console.log(item.toRow().meta);   // { tags: ['a', 'b'] }, not a string
 ```
 
 Casts apply at the model layer only; raw builder rows stay in their storage form. Dirty tracking compares normalized values, so filling `active` with `1` when it already holds `true` does not mark the instance dirty, and a JSON column is only considered changed when its parsed value differs. A value that cannot be cast throws `CastError` naming the column, and `null` stays `null` in both directions.
+
+The `datetime` cast reads and writes `YYYY-MM-DD HH:MM:SS` strings as UTC. For a plain `DATETIME` column that is self-consistent, the string you store is the string you read back. A MySQL `TIMESTAMP` column is different: the engine converts it between the session time zone and UTC, so a non-UTC session shifts the value while the type still looks correct. Run such sessions in UTC (`time_zone = '+00:00'`) when you rely on the cast, since a stateless cast cannot know the session zone.
 
 ## Soft deletes
 

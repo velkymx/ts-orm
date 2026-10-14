@@ -80,6 +80,16 @@ read, write, and partial-update shapes. Introspection
 database for scaffolding, and `structColumns` folds it forward into
 schema-builder column definitions.
 
+Reads trust the engine. Writes validate against the struct, but rows
+coming back are cast to the row type without a runtime check, so a few
+engine behaviors surface as values that do not match their declared
+type. Postgres returns `NUMERIC` and `BIGINT` as strings. MySQL
+`BIGINT` values past 2^53 lose precision when read as a JavaScript
+number. A `NULL` in a column the struct marks `required` still types as
+non-null. None of these are caught at read time; handle large integers
+as strings or `bigint`, and do not assume a required column is never
+null in data the library did not write.
+
 ## Schema and migrations
 
 The schema builder compiles DDL per dialect from one column
