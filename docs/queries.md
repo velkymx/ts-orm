@@ -66,7 +66,7 @@ const page = await query(driver, User)
 
 ## Selecting columns
 
-By default a query selects every column. Narrow it with `select`:
+By default a query selects every column. Narrow it with `select`, which also narrows the row type: `get`, `first`, and `paginate` return only the picked columns, and reading anything else fails typecheck. Narrowing follows the chain, so conditions after `select` keep it:
 
 ```ts
 const names = await query(driver, User).select('id', 'name').get();
