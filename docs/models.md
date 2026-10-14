@@ -181,4 +181,4 @@ await found.restore();      // visible again
 await found.forceDelete();  // gone for good
 ```
 
-Repeat actions are no-ops rather than errors: deleting an already-trashed instance and restoring a live one do nothing. `Model.delete` never cascades to related rows; compose that explicitly with [relations](relations.md).
+Repeat actions are no-ops rather than errors: deleting an already-trashed instance and restoring a live one do nothing. Concurrent racers on one row stamp and deliver once; before-hooks may still run in each racer that observed a live row. `Model.delete` never cascades to related rows; compose that explicitly with [relations](relations.md).

@@ -357,6 +357,34 @@ export function buildSoftUpdate<Table extends string, F extends Fields>(
   return { sql: `UPDATE ${table} SET ${set} WHERE ${filters.join(' AND ')}`, params };
 }
 
+/**
+ * Build a soft restore UPDATE: clear one column over equality filters,
+ * skipping rows that are already live. Sibling of buildSoftUpdate for the
+ * set-null direction, which that builder cannot represent.
+ */
+export function buildSoftRestore<Table extends string, F extends Fields>(
+  dialect: Dialect,
+  struct: Struct<Table, F>,
+  column: string,
+  equals: Record<string, unknown> = {},
+): BuiltStatement {
+  const table = safeIdentifier(struct.table, dialect, 'table name');
+  const params: BindValue[] = [];
+  let n = 0;
+  const filters: string[] = [];
+  for (const key of Object.keys(equals)) {
+    n += 1;
+    params.push(equals[key] as BindValue);
+    filters.push(`${safeIdentifier(key, dialect, 'column name')} = ${dialect.placeholder(n)}`);
+  }
+  if (filters.length === 0) {
+    throw new Error('Refusing to soft restore without a filter: pass conditions');
+  }
+  filters.push(`${safeIdentifier(column, dialect, 'column name')} IS NOT NULL`);
+  const set = `${safeIdentifier(column, dialect, 'column name')} = NULL`;
+  return { sql: `UPDATE ${table} SET ${set} WHERE ${filters.join(' AND ')}`, params };
+}
+
 /** Update a record by id, writing only the columns present in the payload. */
 export async function update<Table extends string, F extends Fields>(
   driver: Driver,
