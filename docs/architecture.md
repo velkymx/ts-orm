@@ -80,3 +80,15 @@ on success or roll back on throw, and always release. `TxHandle` adds
 `AsyncDisposable`, so a throw inside an `await using` scope still
 releases. A `TxConnection` satisfies `Driver`, so CRUD, builders, and
 models run inside transactions unchanged.
+
+## Relations
+
+Relations bind two structs with their key columns: `hasOne` and
+`hasMany` through a foreign key, `belongsTo` through the owner key,
+`belongsToMany` through a pivot struct, and `morphMany` through a type
+column plus value. `load` resolves many parents in a constant number of
+queries (one, two across a pivot, none for empty input) by collecting
+keys into a single `WHERE IN` per table and stitching rows in memory.
+`loadOne` covers the single-row kinds. `deleteRelated` removes
+dependent rows with the builder delete primitive, which is what keeps
+polymorphic children from orphaning.
