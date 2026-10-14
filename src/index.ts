@@ -61,7 +61,7 @@ export {
   NotFoundError,
 } from './crud.js';
 
-export type { ComparisonOperator, BooleanOp, GroupFn } from './query.js';
+export type { ComparisonOperator, BooleanOp, GroupFn, AggregateFn, Page } from './query.js';
 export { QueryBuilder, query } from './query.js';
 
 export { TransactionNotSupportedError, TxHandle, beginTransaction, transaction } from './transaction.js';

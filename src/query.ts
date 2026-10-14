@@ -26,6 +26,18 @@ export type ComparisonOperator =
 /** Join mode between sibling conditions. */
 export type BooleanOp = 'AND' | 'OR';
 
+/** Aggregate functions beyond COUNT. */
+export type AggregateFn = 'SUM' | 'AVG' | 'MIN' | 'MAX';
+
+/** One page of rows plus the totals needed to render pagination. */
+export interface Page<T> {
+  readonly data: readonly T[];
+  readonly total: number;
+  readonly page: number;
+  readonly perPage: number;
+  readonly lastPage: number;
+}
+
 type ConditionNode =
   | { readonly kind: 'basic'; readonly boolean: BooleanOp; readonly column: string; readonly operator: string; readonly value: BindValue }
   | { readonly kind: 'in'; readonly boolean: BooleanOp; readonly column: string; readonly not: boolean; readonly values: readonly BindValue[] }
@@ -349,15 +361,29 @@ export class QueryBuilder<Table extends string, F extends Fields> {
 
   /** Compile the COUNT over the same filters, ignoring order and paging. Raw hatch. */
   toCountSQL(column: (keyof F & string) | '*' = '*'): BuiltStatement {
+    const target = column === '*' ? '*' : this.columnTarget(column as string);
+    return this.aggregateSQL('COUNT', target, 'count');
+  }
+
+  /** Compile SUM/AVG/MIN/MAX over the same filters, ignoring order and paging. Raw hatch. */
+  toAggregateSQL(fn: AggregateFn, column: keyof F & string): BuiltStatement {
+    return this.aggregateSQL(fn, this.columnTarget(column as string), fn.toLowerCase());
+  }
+
+  /** Shared aggregate compiler: function over a target with an aliased output. */
+  private aggregateSQL(fn: string, target: string, alias: string): BuiltStatement {
     const dialect = this.driver.dialect;
     const counter: Counter = { n: 0 };
     const params: BindValue[] = [];
     const table = safeIdentifier(this.struct.table, dialect, 'table name');
-    const target =
-      column === '*' ? '*' : safeIdentifier(column as string, dialect, 'column name');
-    const alias = safeIdentifier('count', dialect, 'column name');
+    const name = safeIdentifier(alias, dialect, 'column name');
     const where = this.buildWhere(dialect, counter, params);
-    return { sql: `SELECT COUNT(${target}) AS ${alias} FROM ${table}${where}`, params };
+    return { sql: `SELECT ${fn}(${target}) AS ${name} FROM ${table}${where}`, params };
+  }
+
+  /** Validate one column for aggregate output, returning it quoted. */
+  private columnTarget(column: string): string {
+    return safeIdentifier(column, this.driver.dialect, 'column name');
   }
 
   /** Execute the SELECT and return all matching rows. */
@@ -392,6 +418,65 @@ export class QueryBuilder<Table extends string, F extends Fields> {
     } catch (error) {
       return fail('Database operation failed', [(error as Error).message]);
     }
+  }
+
+  /** Run one aggregate and return its value, or null when no rows match. */
+  private async aggregate(fn: AggregateFn, column: keyof F & string): Promise<Result<number | null>> {
+    try {
+      const { sql, params } = this.toAggregateSQL(fn, column);
+      const rows = await this.driver.query<Record<string, unknown>>(sql, params);
+      const value = rows[0]?.[fn.toLowerCase()];
+      if (value === null || value === undefined) {
+        return ok(null, `${fn} retrieved`);
+      }
+      return ok(Number(value), `${fn} retrieved`);
+    } catch (error) {
+      return fail('Database operation failed', [(error as Error).message]);
+    }
+  }
+
+  /** Sum a column over the current filters, or null when no rows match. */
+  async sum(column: keyof F & string): Promise<Result<number | null>> {
+    return this.aggregate('SUM', column);
+  }
+
+  /** Average a column over the current filters, or null when no rows match. */
+  async avg(column: keyof F & string): Promise<Result<number | null>> {
+    return this.aggregate('AVG', column);
+  }
+
+  /** Minimum of a column over the current filters, or null when no rows match. */
+  async min(column: keyof F & string): Promise<Result<number | null>> {
+    return this.aggregate('MIN', column);
+  }
+
+  /** Maximum of a column over the current filters, or null when no rows match. */
+  async max(column: keyof F & string): Promise<Result<number | null>> {
+    return this.aggregate('MAX', column);
+  }
+
+  /**
+   * One page plus totals. Page floors to 1 and perPage clamps to 1..100,
+   * so hostile input cannot request unbounded rows.
+   */
+  async paginate(page: number, perPage: number): Promise<Page<RowOf<F>>> {
+    const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+    const safePerPage = Number.isInteger(perPage) ? Math.min(100, Math.max(1, perPage)) : 10;
+    const total = await this.count();
+    if (!total.success) {
+      throw new Error(total.errors.join(', '));
+    }
+    const rows = await this.clone().limit(safePerPage).offset((safePage - 1) * safePerPage).get();
+    if (!rows.success) {
+      throw new Error(rows.errors.join(', '));
+    }
+    return {
+      data: rows.data,
+      total: total.data,
+      page: safePage,
+      perPage: safePerPage,
+      lastPage: Math.ceil(total.data / safePerPage),
+    };
   }
 
   /** Compile the DELETE over the same filters, ignoring order and paging. Raw hatch. */
