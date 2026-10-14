@@ -8,10 +8,12 @@
  * which is what keeps polymorphic children from orphaning.
  */
 
-import { primaryKey } from './crud.js';
+import { buildSoftUpdate, primaryKey } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
-import { query } from './query.js';
+import { timestampNow } from './lifecycle.js';
+import { query, type QueryBuilder } from './query.js';
 import type { Result } from './result.js';
+import { SOFT_COLUMN, hasSoftColumn, requireSoftColumn } from './soft.js';
 import type { Fields, RowOf, Struct } from './struct.js';
 
 /** Relation shapes. Source rows go in, target rows come out keyed. */
@@ -177,15 +179,40 @@ function rowsOf<T>(result: Result<T[]>, operation: string): T[] {
   return result.data;
 }
 
+/** Options for relation loads. */
+export interface LoadOptions {
+  /** Include soft deleted target rows. Defaults to hiding them. */
+  readonly withTrashed?: boolean;
+}
+
+/**
+ * Start a target query with the soft scope applied when the target struct
+ * declares the column. Pivot tables never scope: links are not entities.
+ * The predicate names only the target table, so sibling tables never leak.
+ */
+function scoped<TT extends string, TF extends Fields>(
+  driver: Driver,
+  target: Struct<TT, TF>,
+  opts?: LoadOptions,
+): QueryBuilder<TT, TF> {
+  const builder = query(driver, target);
+  if (opts?.withTrashed !== true && hasSoftColumn(target)) {
+    builder.softScope(SOFT_COLUMN);
+  }
+  return builder;
+}
+
 /**
  * Eager load one relation for many parents, mapping each join value to its
  * rows (empty array when none). Runs one query, two across a pivot, none
- * for no parents or no keys.
+ * for no parents or no keys. Soft deleted targets stay hidden unless
+ * withTrashed is set.
  */
 export async function load<ST extends string, SF extends Fields, TT extends string, TF extends Fields>(
   driver: Driver,
   rel: Relation<ST, SF, TT, TF>,
   parents: readonly Partial<RowOf<SF>>[],
+  opts?: LoadOptions,
 ): Promise<Loaded<TF>> {
   const out: Loaded<TF> = new Map();
   if (parents.length === 0) {
@@ -199,7 +226,7 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
       const target = rel.target as Struct<string, Fields>;
       const keys = keySet(rows, rel.localKey as string);
       if (keys.length > 0) {
-        const children = rowsOf(await query(driver, target).whereIn(rel.foreignKey as string, keys).get(), 'load');
+        const children = rowsOf(await scoped(driver, target, opts).whereIn(rel.foreignKey as string, keys).get(), 'load');
         const grouped = new Map<BindValue, Record<string, unknown>[]>();
         for (const key of keys) {
           grouped.set(key, []);
@@ -217,7 +244,7 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
     case 'belongsTo': {
       const keys = keySet(rows, rel.foreignKey as string);
       if (keys.length > 0) {
-        const owners = rowsOf(await query(driver, rel.target).whereIn(rel.ownerKey, keys).get(), 'load');
+        const owners = rowsOf(await scoped(driver, rel.target, opts).whereIn(rel.ownerKey, keys).get(), 'load');
         for (const owner of owners) {
           const key = (owner as Record<string, unknown>)[rel.ownerKey as string] as BindValue;
           const list = out.get(key);
@@ -235,7 +262,7 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
       if (keys.length > 0) {
         const links = rowsOf(await query(driver, rel.pivot).whereIn(rel.foreignKey, keys).get(), 'load pivot');
         const targets = rowsOf(
-          await query(driver, rel.target).whereIn(rel.relatedLocalKey, [
+          await scoped(driver, rel.target, opts).whereIn(rel.relatedLocalKey, [
             ...new Set(links.map((l) => (l as Record<string, unknown>)[rel.relatedKey as string] as BindValue)),
           ]).get(),
           'load targets',
@@ -261,7 +288,7 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
       const keys = keySet(rows, rel.localKey as string);
       if (keys.length > 0) {
         const children = rowsOf(
-          await query(driver, rel.target)
+          await scoped(driver, rel.target, opts)
             .where(rel.typeColumn, rel.typeValue)
             .whereIn(rel.idColumn, keys)
             .get(),
@@ -285,6 +312,7 @@ export async function loadOne<ST extends string, SF extends Fields, TT extends s
   driver: Driver,
   rel: HasOne<ST, SF, TT, TF> | BelongsTo<ST, SF, TT, TF>,
   parent: Partial<RowOf<SF>>,
+  opts?: LoadOptions,
 ): Promise<RowOf<TF> | null> {
   const key = rel.kind === 'hasOne' ? rel.localKey : rel.foreignKey;
   const value = (parent as Record<string, unknown>)[key as string] as BindValue | undefined;
@@ -292,23 +320,34 @@ export async function loadOne<ST extends string, SF extends Fields, TT extends s
     return null;
   }
   if (rel.kind === 'hasOne') {
-    const result = await query(driver, rel.target).where(rel.foreignKey, value).first();
+    const result = await scoped(driver, rel.target, opts).where(rel.foreignKey, value).first();
     if (!result.success) {
       throw new Error(`loadOne failed: ${result.errors.join(', ')}`);
     }
     return result.data;
   }
-  const result = await query(driver, rel.target).where(rel.ownerKey, value).first();
+  const result = await scoped(driver, rel.target, opts).where(rel.ownerKey, value).first();
   if (!result.success) {
     throw new Error(`loadOne failed: ${result.errors.join(', ')}`);
   }
   return result.data;
 }
 
+/** How deleteRelated treats dependent rows. */
+export type DeleteRelatedMode =
+  /** Physically remove dependents (pivot links detach), the historical default. */
+  | 'force'
+  /** Stamp dependents, skipping already stamped ones; pivot links still detach. */
+  | 'soft'
+  /** Touch nothing and report zero. */
+  | 'ignore';
+
 /**
  * Delete dependent rows for the given parent keys in one statement per
  * table. Pivot kinds detach links only; belongsTo owns nothing and throws.
- * Returns the total affected rows.
+ * Mode force removes physically, soft stamps the delete column (throwing
+ * when the child struct lacks it), ignore returns 0. Bulk either way:
+ * no hooks fire. Returns the total affected rows.
  */
 export async function deleteRelated<
   ST extends string,
@@ -319,9 +358,13 @@ export async function deleteRelated<
   driver: Driver,
   rel: Relation<ST, SF, TT, TF>,
   parentIds: readonly BindValue[],
+  mode: DeleteRelatedMode = 'force',
 ): Promise<number> {
-  if (parentIds.length === 0) {
+  if (parentIds.length === 0 || mode === 'ignore') {
     return 0;
+  }
+  if (mode === 'soft') {
+    return softDeleteRelated(driver, rel, parentIds);
   }
   switch (rel.kind) {
     case 'hasOne':
@@ -344,6 +387,52 @@ export async function deleteRelated<
     }
     case 'belongsToMany': {
       const result = await query(driver, rel.pivot).whereIn(rel.foreignKey, [...parentIds]).delete();
+      if (!result.success) {
+        throw new Error(`deleteRelated failed: ${result.errors.join(', ')}`);
+      }
+      return result.data.affectedRows;
+    }
+    case 'belongsTo': {
+      throw new Error('deleteRelated does not apply to belongsTo: the source owns no rows');
+    }
+  }
+}
+
+/**
+ * Stamp dependent rows instead of removing them. Pivot links still detach
+ * physically: shared targets must never vanish with one parent. Throws
+ * when the child struct has no delete column.
+ */
+async function softDeleteRelated<ST extends string, SF extends Fields, TT extends string, TF extends Fields>(
+  driver: Driver,
+  rel: Relation<ST, SF, TT, TF>,
+  parentIds: readonly BindValue[],
+): Promise<number> {
+  const ids = [...parentIds];
+  switch (rel.kind) {
+    case 'hasOne':
+    case 'hasMany': {
+      const column = requireSoftColumn(rel.target);
+      const { sql, params } = buildSoftUpdate(driver.dialect, rel.target, column, timestampNow(), {}, {
+        column: rel.foreignKey as string,
+        values: ids,
+      });
+      return (await driver.execute(sql, params)).affectedRows;
+    }
+    case 'morphMany': {
+      const column = requireSoftColumn(rel.target);
+      const { sql, params } = buildSoftUpdate(
+        driver.dialect,
+        rel.target,
+        column,
+        timestampNow(),
+        { [rel.typeColumn as string]: rel.typeValue },
+        { column: rel.idColumn as string, values: ids },
+      );
+      return (await driver.execute(sql, params)).affectedRows;
+    }
+    case 'belongsToMany': {
+      const result = await query(driver, rel.pivot).whereIn(rel.foreignKey, ids).delete();
       if (!result.success) {
         throw new Error(`deleteRelated failed: ${result.errors.join(', ')}`);
       }
