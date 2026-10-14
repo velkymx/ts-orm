@@ -130,6 +130,18 @@ and dirty tracking compares normalized values so `1` equals `true`
 and `'{"a":1}'` equals `{a:1}`. Null stays null both ways, corrupt
 values throw `CastError` naming the column.
 
+Changelogs need no framework: `examples/changelog.mjs` records
+creations plus attribute changes with old and new values using only
+typed after-hooks and change payloads, keeping last-known snapshots to
+pair with each delivery. After-hooks run post-commit inside caller
+transactions and their failures log without failing the write, so a
+listener can never misreport a commit. In-memory listeners are not
+crash-durable by design; for durable delivery use the outbox pattern
+instead: write the changelog rows inside the same transaction as the
+domain write (a `saving` hook or an explicit write on the transaction
+connection), commit once, then relay outbox rows to the log
+asynchronously after commit.
+
 No savepoint nesting: each `transaction` call checks out an
 independent connection and commits independently. Concurrent nesting on
 single-connection drivers fails at the engine; pool drivers commit the
