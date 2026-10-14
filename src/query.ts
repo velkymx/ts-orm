@@ -5,7 +5,7 @@
  */
 
 import type { Dialect } from './dialect.js';
-import { safeIdentifier } from './identifiers.js';
+import { safeIdentifier, escapeLike } from './identifiers.js';
 import type { BuiltStatement } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
 import type { Fields, RowOf, Struct } from './struct.js';
@@ -31,6 +31,7 @@ type ConditionNode =
   | { readonly kind: 'in'; readonly boolean: BooleanOp; readonly column: string; readonly not: boolean; readonly values: readonly BindValue[] }
   | { readonly kind: 'between'; readonly boolean: BooleanOp; readonly column: string; readonly not: boolean; readonly low: BindValue; readonly high: BindValue }
   | { readonly kind: 'null'; readonly boolean: BooleanOp; readonly column: string; readonly not: boolean }
+  | { readonly kind: 'like'; readonly boolean: BooleanOp; readonly column: string; readonly substring: string }
   | { readonly kind: 'group'; readonly boolean: BooleanOp; readonly children: readonly ConditionNode[] }
   | { readonly kind: 'tautology'; readonly boolean: BooleanOp; readonly value: boolean };
 
@@ -92,6 +93,12 @@ function compileNode(
     case 'null': {
       const col = safeIdentifier(node.column, dialect, 'column name');
       return node.not ? `${col} IS NOT NULL` : `${col} IS NULL`;
+    }
+    case 'like': {
+      const col = safeIdentifier(node.column, dialect, 'column name');
+      counter.n += 1;
+      params.push(`%${escapeLike(node.substring)}%` as BindValue);
+      return `${col} LIKE ${dialect.placeholder(counter.n)} ESCAPE '\\'`;
     }
     case 'tautology': {
       return node.value ? '1 = 1' : '1 = 0';
@@ -270,6 +277,16 @@ export class QueryBuilder<Table extends string, F extends Fields> {
   /** OR IS NOT NULL condition, emits no params. */
   orWhereNotNull(column: keyof F & string): QueryBuilder<Table, F> {
     return this.push({ kind: 'null', boolean: 'OR', column, not: true });
+  }
+
+  /** AND contains-match with user input escaped, so % and _ stay literal. */
+  whereLike(column: keyof F & string, substring: string): QueryBuilder<Table, F> {
+    return this.push({ kind: 'like', boolean: 'AND', column, substring });
+  }
+
+  /** OR contains-match with user input escaped, so % and _ stay literal. */
+  orWhereLike(column: keyof F & string, substring: string): QueryBuilder<Table, F> {
+    return this.push({ kind: 'like', boolean: 'OR', column, substring });
   }
 
   /** Restrict the SELECT column list, defaults to all columns. */
