@@ -172,6 +172,51 @@ describe('soft delete basics (issue 82)', () => {
     await driver.close();
   });
 
+  it('stamps once and delivers once for concurrent deletes of one row', async () => {
+    const driver = await setup();
+    const seen: string[] = [];
+    class M extends defineModel(driver, Post) {
+      static override softDeletes = true;
+      static override hooks = {
+        deleting: () => void seen.push('deleting'),
+        deleted: () => void seen.push('deleted'),
+      };
+    }
+    await M.create({ title: 'a' });
+    const one = (await M.withTrashed().find(1))!;
+    const two = (await M.withTrashed().find(1))!;
+    await Promise.all([one.delete(), two.delete()]);
+    // The stamp and the delivery land exactly once. Before-hooks may still
+    // run in both racers that observed a live row; serializing user hook
+    // code to prevent that would deadlock hook reentrancy.
+    expect(seen.filter((h) => h === 'deleted')).toEqual(['deleted']);
+    expect(await M.find(1)).toBeNull();
+    const raw = await driver.query<Record<string, unknown>>('SELECT * FROM "posts"', []);
+    expect(raw).toHaveLength(1);
+    await driver.close();
+  });
+
+  it('restores once for concurrent restores of one row', async () => {
+    const driver = await setup();
+    const seen: string[] = [];
+    class M extends defineModel(driver, Post) {
+      static override softDeletes = true;
+      static override hooks = {
+        restoring: () => void seen.push('restoring'),
+        restored: () => void seen.push('restored'),
+      };
+    }
+    await M.create({ title: 'a' });
+    const one = (await M.withTrashed().find(1))!;
+    await one.delete();
+    const two = (await M.withTrashed().find(1))!;
+    const three = (await M.withTrashed().find(1))!;
+    await Promise.all([two.restore(), three.restore()]);
+    expect(seen.filter((h) => h === 'restored')).toEqual(['restored']);
+    expect((await M.find(1))?.toRow().title).toBe('a');
+    await driver.close();
+  });
+
   it('restores respect veto hooks', async () => {
     const driver = await setup();
     class M extends defineModel(driver, Post) {

@@ -51,6 +51,7 @@ export {
   buildSelectWith,
   buildUpdate,
   buildSoftUpdate,
+  buildSoftRestore,
   buildDelete,
   primaryKey,
   create,

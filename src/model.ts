@@ -9,6 +9,7 @@
 
 import {
   buildSoftUpdate,
+  buildSoftRestore,
   buildUpdate,
   create as createRow,
   findOrFail as findOrFailRow,
@@ -137,6 +138,15 @@ export function defineModel<Table extends string, F extends Fields>(
 
   function failMessage(message: string, errors: readonly string[]): string {
     return errors.length > 0 ? `${message}: ${errors.join(', ')}` : message;
+  }
+
+  /** Unscoped reread of one row for race checks. Throws on driver failure. */
+  async function freshRow(target: Driver, id: BindValue): Promise<Row | null> {
+    const result = await readOne(target, struct, { [pk]: id } as Partial<Row>);
+    if (!result.success) {
+      throw new Error(failMessage(result.message, result.errors));
+    }
+    return result.data;
   }
 
   function hooksOf(ctor: unknown): ModelHooks<F> | undefined {
@@ -408,15 +418,30 @@ export function defineModel<Table extends string, F extends Fields>(
       }
       const soft = softColumnOf(this.constructor, struct);
       if (soft !== null) {
-        // Repeat deletes are silent no-ops, so double taps never restamp.
         if (isTrashed(this.attributes as Record<string, unknown>)) {
           return;
         }
-        await runHooks(hooks, 'deleting', context(this.attributes, {}));
         const casts = castsOf(this.constructor);
+        const current = await freshRow(target, id);
+        if (current !== null && isTrashed(current as Record<string, unknown>)) {
+          this.attributes = castOut({ ...current }, casts) as Row;
+          this.original = { ...this.attributes };
+          return;
+        }
+        await runHooks(hooks, 'deleting', context(this.attributes, {}));
         const stamped = castIn({ [soft]: softStamp() }, casts)[soft];
-        const { sql, params } = buildUpdate(target.dialect, struct, { [soft]: stamped, [pk]: id }, pk);
-        await target.execute(sql, params);
+        const { sql, params } = buildSoftUpdate(target.dialect, struct, soft, stamped as BindValue, {
+          [pk]: id,
+        });
+        const written = await target.execute(sql, params);
+        if (written.affectedRows === 0) {
+          const latest = await freshRow(target, id);
+          if (latest !== null) {
+            this.attributes = castOut({ ...latest }, casts) as Row;
+            this.original = { ...this.attributes };
+          }
+          return;
+        }
         this.attributes = castOut({ ...(this.attributes as Record<string, unknown>), [soft]: stamped }, casts) as Row;
         this.original = { ...this.attributes };
         await deliver(target, hooks, ['deleted'], context(this.attributes, {}));
@@ -444,9 +469,23 @@ export function defineModel<Table extends string, F extends Fields>(
       if (!isTrashed(this.attributes as Record<string, unknown>)) {
         return this;
       }
+      const current = await freshRow(target, id);
+      if (current !== null && !isTrashed(current as Record<string, unknown>)) {
+        this.attributes = castOut({ ...current }, castsOf(this.constructor)) as Row;
+        this.original = { ...this.attributes };
+        return this;
+      }
       await runHooks(hooks, 'restoring', context(this.attributes, { [soft]: null } as Partial<Row>));
-      const { sql, params } = buildUpdate(target.dialect, struct, { [soft]: null, [pk]: id }, pk);
-      await target.execute(sql, params);
+      const { sql, params } = buildSoftRestore(target.dialect, struct, soft, { [pk]: id });
+      const written = await target.execute(sql, params);
+      if (written.affectedRows === 0) {
+        const latest = await freshRow(target, id);
+        if (latest !== null) {
+          this.attributes = castOut({ ...latest }, castsOf(this.constructor)) as Row;
+          this.original = { ...this.attributes };
+        }
+        return this;
+      }
       (this.attributes as Record<string, unknown>)[soft] = null;
       this.original = { ...this.attributes };
       await deliver(target, hooks, ['restored'], context(this.attributes, {}));
