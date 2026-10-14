@@ -4,6 +4,8 @@
  * real with a round-trip through Date so impossible dates (e.g. Feb 30) fail.
  */
 
+import type { Fields } from './struct.js';
+
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
@@ -69,4 +71,87 @@ export function isValidBoolean(value: unknown): boolean {
     value === '0' ||
     value === '1'
   );
+}
+
+/** A single payload validation failure, tied to the offending column. */
+export interface ValidationError {
+  readonly field: string;
+  readonly message: string;
+}
+
+export interface ValidateOptions {
+  /** Reject caller-supplied auto_increment values (insert path). */
+  readonly skipAutoIncrement?: boolean;
+  /** Validate only the fields present in the payload (partial update path). */
+  readonly partial?: boolean;
+}
+
+/**
+ * Validate a payload against a struct's fields, returning one error per
+ * offending column. Absent non-required fields are skipped; `partial` mode
+ * skips absent required fields too so partial updates are not forced to
+ * resend every column.
+ */
+export function validatePayload(
+  fields: Fields,
+  payload: Record<string, unknown>,
+  options: ValidateOptions = {},
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  for (const name of Object.keys(fields)) {
+    const def = fields[name]!;
+    const value = payload[name];
+    const isAuto = def.default === 'auto_increment';
+
+    if (options.skipAutoIncrement && isAuto) {
+      if (value !== undefined) {
+        errors.push({ field: name, message: `${name} should not be provided (auto_increment)` });
+      }
+      continue;
+    }
+
+    if (value === undefined && options.partial) {
+      continue;
+    }
+
+    if (def.required && (value === undefined || value === null)) {
+      errors.push({ field: name, message: `${name} is required` });
+      continue;
+    }
+
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (def.type === 'number' && Number.isNaN(Number(value))) {
+      errors.push({ field: name, message: `${name} must be a number` });
+    }
+
+    if (def.type === 'uuid' && !isValidUUID(value)) {
+      errors.push({ field: name, message: `${name} must be a valid UUID` });
+    }
+
+    if (def.type === 'datetime' && value !== 'current_timestamp' && !isValidDatetime(value)) {
+      errors.push({ field: name, message: `${name} must be in format YYYY-MM-DD HH:MM:SS` });
+    }
+
+    if (def.type === 'date' && !isValidDate(value)) {
+      errors.push({ field: name, message: `${name} must be in format YYYY-MM-DD` });
+    }
+
+    if (def.type === 'boolean' && !isValidBoolean(value)) {
+      errors.push({ field: name, message: `${name} must be a boolean` });
+    }
+
+    if (def.enum && !def.enum.includes(value as string)) {
+      errors.push({ field: name, message: `${name} must be one of ${def.enum.join(', ')}` });
+    }
+
+    if (def.length && typeof value === 'string' && def.length > 0 && value.length > def.length) {
+      errors.push({ field: name, message: `${name} exceeds max length of ${def.length}` });
+    }
+  }
+
+  return errors;
 }
