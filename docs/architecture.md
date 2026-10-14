@@ -17,6 +17,11 @@
   behind the `Driver` contract; SQLite adds nothing on Node 24+.
 - Errors are safe by default. Driver failures map to `OrmError` codes
   with client-safe messages; full detail goes to an injectable logger.
+- Introspection reads, never owns. `generateStructFromTable` maps a
+  live MySQL table to struct fields over the shared driver (no private
+  pool), with `tinyint(1)` alone meaning boolean. The CLI `struct`
+  command prints that mapping as JSON; shaping it into `defineStruct`
+  stays a caller decision.
 
 ## Query execution
 
