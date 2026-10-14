@@ -29,7 +29,12 @@ export function resolveConfig(overrides: Partial<DbConfig> = {}): DbConfig {
   const user = overrides.user ?? process.env.DB_USER;
   const database = overrides.database ?? process.env.DB_DATABASE;
   const password = overrides.password ?? process.env.DB_PASSWORD ?? '';
-  const port = overrides.port ?? (process.env.DB_PORT ? Number(process.env.DB_PORT) : DEFAULT_PORT);
+  const rawPort = overrides.port ?? (process.env.DB_PORT ? Number(process.env.DB_PORT) : DEFAULT_PORT);
+  if (!Number.isInteger(rawPort) || rawPort < 1 || rawPort > 65535) {
+    const seen = overrides.port ?? process.env.DB_PORT;
+    throw new Error(`Invalid database port "${seen}": expected an integer 1-65535`);
+  }
+  const port = rawPort;
 
   const missing: string[] = [];
   if (!host) missing.push('DB_HOST');

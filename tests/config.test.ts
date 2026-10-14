@@ -58,4 +58,16 @@ describe('resolveConfig', () => {
   it('throws listing every missing required key', () => {
     expect(() => resolveConfig()).toThrow(/DB_HOST.*DB_USER.*DB_DATABASE/s);
   });
+
+  it('rejects non-numeric and out-of-range ports naming the value', () => {
+    process.env.DB_HOST = 'h';
+    process.env.DB_USER = 'u';
+    process.env.DB_DATABASE = 'd';
+    process.env.DB_PORT = 'notaport';
+    expect(() => resolveConfig()).toThrow(/port.*notaport/i);
+    process.env.DB_PORT = '99999';
+    expect(() => resolveConfig()).toThrow(/port/i);
+    delete process.env.DB_PORT;
+    expect(() => resolveConfig({ port: Number.NaN })).toThrow(/port/i);
+  });
 });
