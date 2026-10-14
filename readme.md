@@ -31,6 +31,7 @@ await driver.close();
 - Fluent query builder: operators, `IN`, `BETWEEN`, `LIKE`, `AND`/`OR` groups, paging, `COUNT`
 - Model base class with dirty-tracked saves and transactions
 - Relations with batched eager loading plus dependent deletes
+- Model lifecycle hooks with transaction-aware delivery
 - Multi-engine drivers sharing one `Driver` contract
 - Transactions with auto commit/rollback plus disposable handles
 - Validation-first writes and a sanitized, injectable-logger error route

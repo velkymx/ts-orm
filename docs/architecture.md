@@ -92,3 +92,19 @@ keys into a single `WHERE IN` per table and stitching rows in memory.
 `loadOne` covers the single-row kinds. `deleteRelated` removes
 dependent rows with the builder delete primitive, which is what keeps
 polymorphic children from orphaning.
+
+## Lifecycle
+
+Hooks run around model writes only: `saving` plus `creating` before an
+insert and `created` plus `saved` after, `saving` plus `updating`
+before a dirty update and `updated` plus `saved` after, `deleting`
+before a delete and `deleted` after. A throw vetoes the write before
+any SQL runs. The CRUD functions never dispatch, so bulk and raw paths
+have explicit no-event semantics.
+
+Nothing opens its own transaction for hooks. After-hooks deliver inline
+on plain drivers and defer to the outer commit inside a caller
+transaction through `afterCommit`, drained by `transaction` and
+`TxHandle.commit`. Deferred failures log through the error route and
+never fail the write, so a committed write is never reported as
+rolled back.

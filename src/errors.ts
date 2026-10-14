@@ -42,6 +42,11 @@ export function resetLogger(): void {
   logger = defaultLogger;
 }
 
+/** Log an operational failure server-side without throwing. */
+export function logError(message: string, detail: unknown): void {
+  logger(message, detail);
+}
+
 /**
  * Log full detail server-side and return a safe message for the client.
  * Non-OrmError input is treated as unknown so nothing raw ever leaks.
