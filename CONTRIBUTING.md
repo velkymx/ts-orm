@@ -32,7 +32,7 @@ This project is maintained with a focus on clarity, consistency, and practical f
 
 One logical change per commit, every commit keeps tests green. Format follows the 7 rules popularized by Chris Beams and summarized in the AJB Blog guide to Git best practices (https://blog.ajb.bz/git-best-practices-a-guide-for-new-developers):
 
-- Subject: `type(scope): Imperative summary`, no period, aim under 50 chars after the prefix.
+- Subject: `Imperative summary`, capitalized, no period, under 50 chars. No type or scope prefixes on new work (older history still carries them; do not mix styles).
 - Blank line, then a body explaining what changed and why (wrap near 72 cols).
 - Reference the issue in the body with `Refs #N`, and `Closes #N` only on the PR description.
 - Never work directly on the primary branch; one branch and one PR per issue.

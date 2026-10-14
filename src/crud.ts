@@ -31,7 +31,7 @@ async function guarded<T>(
 }
 
 /** The primary key column: the auto_increment field, else the first field, else id. */
-function primaryKey(fields: Fields): string {
+export function primaryKey(fields: Fields): string {
   for (const name of Object.keys(fields)) {
     if (fields[name]!.default === 'auto_increment') return name;
   }
