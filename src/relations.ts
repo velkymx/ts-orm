@@ -205,6 +205,22 @@ function rowsOf<T>(result: Result<T[]>, operation: string): T[] {
   return result.data;
 }
 
+/**
+ * One fixed chunk size for every engine, comfortably under the smallest
+ * bind ceiling. Relations fan keys out through this instead of one giant
+ * IN list, merging rows before grouping.
+ */
+const KEY_CHUNK_SIZE = 500;
+
+/** Run one query per key chunk, concatenating the rows in order. */
+async function batchedIn<T>(keys: readonly BindValue[], run: (chunk: BindValue[]) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < keys.length; i += KEY_CHUNK_SIZE) {
+    out.push(...(await run(keys.slice(i, i + KEY_CHUNK_SIZE))));
+  }
+  return out;
+}
+
 /** Options for relation loads. */
 export interface LoadOptions {
   /** Include soft deleted target rows. Defaults to hiding them. */
@@ -230,9 +246,9 @@ function scoped<TT extends string, TF extends Fields>(
 
 /**
  * Eager load one relation for many parents, mapping each join value to its
- * rows (empty array when none). Runs one query, two across a pivot, none
- * for no parents or no keys. Soft deleted targets stay hidden unless
- * withTrashed is set.
+ * rows (empty array when none). Runs one query per 500-key chunk, two per
+ * chunk across a pivot, none for no parents or no keys. Soft deleted targets
+ * stay hidden unless withTrashed is set.
  */
 export async function load<ST extends string, SF extends Fields, TT extends string, TF extends Fields>(
   driver: Driver,
@@ -252,7 +268,9 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
       const target = rel.target as Struct<string, Fields>;
       const keys = keySet(rows, rel.localKey as string);
       if (keys.length > 0) {
-        const children = rowsOf(await scoped(driver, target, opts).whereIn(rel.foreignKey as string, keys).get(), 'load');
+        const children = await batchedIn(keys, async (chunk) =>
+          rowsOf(await scoped(driver, target, opts).whereIn(rel.foreignKey as string, chunk).get(), 'load'),
+        );
         const grouped = new Map<BindValue, Record<string, unknown>[]>();
         for (const key of keys) {
           grouped.set(key, []);
@@ -270,7 +288,9 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
     case 'belongsTo': {
       const keys = keySet(rows, rel.foreignKey as string);
       if (keys.length > 0) {
-        const owners = rowsOf(await scoped(driver, rel.target, opts).whereIn(rel.ownerKey, keys).get(), 'load');
+        const owners = await batchedIn(keys, async (chunk) =>
+          rowsOf(await scoped(driver, rel.target, opts).whereIn(rel.ownerKey, chunk).get(), 'load'),
+        );
         for (const owner of owners) {
           const key = (owner as Record<string, unknown>)[rel.ownerKey as string] as BindValue;
           const list = out.get(key);
@@ -286,12 +306,14 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
     case 'belongsToMany': {
       const keys = keySet(rows, rel.localKey as string);
       if (keys.length > 0) {
-        const links = rowsOf(await query(driver, rel.pivot).whereIn(rel.foreignKey, keys).get(), 'load pivot');
-        const targets = rowsOf(
-          await scoped(driver, rel.target, opts).whereIn(rel.relatedLocalKey, [
-            ...new Set(links.map((l) => (l as Record<string, unknown>)[rel.relatedKey as string] as BindValue)),
-          ]).get(),
-          'load targets',
+        const links = await batchedIn(keys, async (chunk) =>
+          rowsOf(await query(driver, rel.pivot).whereIn(rel.foreignKey, chunk).get(), 'load pivot'),
+        );
+        const targetKeys = [
+          ...new Set(links.map((l) => (l as Record<string, unknown>)[rel.relatedKey as string] as BindValue)),
+        ];
+        const targets = await batchedIn(targetKeys, async (chunk) =>
+          rowsOf(await scoped(driver, rel.target, opts).whereIn(rel.relatedLocalKey, chunk).get(), 'load targets'),
         );
         const byTarget = new Map<BindValue, RowOf<TF>>();
         for (const target of targets) {
@@ -314,12 +336,14 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
     case 'morphMany': {
       const keys = keySet(rows, rel.localKey as string);
       if (keys.length > 0) {
-        const children = rowsOf(
-          await scoped(driver, rel.target, opts)
-            .where(rel.typeColumn, rel.typeValue)
-            .whereIn(rel.idColumn, keys)
-            .get(),
-          'load',
+        const children = await batchedIn(keys, async (chunk) =>
+          rowsOf(
+            await scoped(driver, rel.target, opts)
+              .where(rel.typeColumn, rel.typeValue)
+              .whereIn(rel.idColumn, chunk)
+              .get(),
+            'load',
+          ),
         );
         for (const key of keys) {
           out.set(key, []);
