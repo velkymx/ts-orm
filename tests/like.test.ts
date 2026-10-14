@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { escapeLike } from '../src/identifiers.js';
 import { query } from '../src/query.js';
 import { defineStruct } from '../src/struct.js';
-import { mysql, postgres, mssql } from '../src/dialect.js';
+import { mysql, postgres, mssql, sqlite } from '../src/dialect.js';
 import { createSqliteDriver } from '../src/drivers/sqlite.js';
 import type { Driver } from '../src/driver.js';
 
@@ -39,7 +39,7 @@ describe('whereLike (issue 71)', () => {
   it('binds an escaped contains pattern with an explicit ESCAPE', () => {
     const b = query(fakeDriver(), User).whereLike('name', 'b%b_b\\');
     expect(b.toSQL()).toEqual({
-      sql: "SELECT * FROM `users` WHERE `name` LIKE ? ESCAPE '\\'",
+      sql: "SELECT * FROM `users` WHERE `name` LIKE ? ESCAPE '\\\\'",
       params: ['%b\\%b\\_b\\\\%'],
     });
   });
@@ -47,12 +47,20 @@ describe('whereLike (issue 71)', () => {
   it('orWhereLike joins with OR', () => {
     const b = query(fakeDriver(), User).where('id', 1).orWhereLike('name', 'x');
     expect(b.toSQL()).toEqual({
-      sql: "SELECT * FROM `users` WHERE `id` = ? OR `name` LIKE ? ESCAPE '\\'",
+      sql: "SELECT * FROM `users` WHERE `id` = ? OR `name` LIKE ? ESCAPE '\\\\'",
       params: [1, '%x%'],
     });
   });
 
-  it('numbers placeholders per dialect in order', () => {
+  it('doubles the escape backslash on mysql (issue 125)', () => {
+    const b = query(fakeDriver(mysql), User).whereLike('name', 'a%b');
+    expect(b.toSQL()).toEqual({
+      sql: "SELECT * FROM `users` WHERE `name` LIKE ? ESCAPE '\\\\'",
+      params: ['%a\\%b%'],
+    });
+  });
+
+  it('keeps a single escape backslash on postgres, sqlite, and mssql', () => {
     const pg = query(fakeDriver(postgres), User).where('id', 1).whereLike('name', 'a%b');
     expect(pg.toSQL()).toEqual({
       sql: `SELECT * FROM "users" WHERE "id" = $1 AND "name" LIKE $2 ESCAPE '\\'`,
@@ -60,6 +68,8 @@ describe('whereLike (issue 71)', () => {
     });
     const ms = query(fakeDriver(mssql), User).whereLike('name', 'q');
     expect(ms.toSQL().sql).toBe(`SELECT * FROM [users] WHERE [name] LIKE @p1 ESCAPE '\\'`);
+    const lite = query(fakeDriver(sqlite), User).whereLike('name', 'q');
+    expect(lite.toSQL().sql).toBe(`SELECT * FROM "users" WHERE "name" LIKE ? ESCAPE '\\'`);
   });
 
   it('still validates the column identifier', () => {

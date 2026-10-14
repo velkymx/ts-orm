@@ -116,7 +116,10 @@ function compileNode(
       const col = safeIdentifier(node.column, dialect, 'column name');
       counter.n += 1;
       params.push(`%${escapeLike(node.substring)}%` as BindValue);
-      return `${col} LIKE ${dialect.placeholder(counter.n)} ESCAPE '\\'`;
+      // MySQL processes backslash escapes inside string literals, so the
+      // escape character must be doubled there; elsewhere one suffices.
+      const escape = dialect.name === 'mysql' ? `'\\\\'` : `'\\'`;
+      return `${col} LIKE ${dialect.placeholder(counter.n)} ESCAPE ${escape}`;
     }
     case 'tautology': {
       return node.value ? '1 = 1' : '1 = 0';
