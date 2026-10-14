@@ -6,7 +6,7 @@
 
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { sqlite as sqliteDialect } from '../dialect.js';
-import type { BindValue, Driver, ExecuteResult } from '../driver.js';
+import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
 
 export interface SqliteOptions {
   /** Database file path, or ':memory:' for an ephemeral database. */
@@ -46,6 +46,45 @@ export function createSqliteDriver(options: SqliteOptions = {}): Driver {
         db.close();
         db = null;
       }
+    },
+
+    async beginTransaction(): Promise<TxConnection> {
+      const handle = getDb();
+      handle.exec('BEGIN IMMEDIATE');
+      let done = false;
+      return {
+        dialect: sqliteDialect,
+
+        async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
+          const statement = handle.prepare(text);
+          return statement.all(...(params as SQLInputValue[])) as Row[];
+        },
+
+        async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
+          const statement = handle.prepare(text);
+          const info = statement.run(...(params as SQLInputValue[]));
+          return {
+            insertId: Number(info.lastInsertRowid),
+            affectedRows: Number(info.changes),
+          };
+        },
+
+        async close(): Promise<void> {},
+
+        async commit(): Promise<void> {
+          handle.exec('COMMIT');
+          done = true;
+        },
+
+        async rollback(): Promise<void> {
+          if (!done) {
+            handle.exec('ROLLBACK');
+            done = true;
+          }
+        },
+
+        async release(): Promise<void> {},
+      };
     },
   };
 }
