@@ -70,7 +70,7 @@ export type { ModelInstance, ModelStatic } from './model.js';
 export { defineModel } from './model.js';
 
 export type { HookName, HookContext, HookFn, ModelHooks } from './lifecycle.js';
-export { runHooks, isTransaction, afterCommit, drainAfterCommit, deliver } from './lifecycle.js';
+export { runHooks, isTransaction, afterCommit, drainAfterCommit, deliver, timestampNow, timestampHooks } from './lifecycle.js';
 
 export type {
   RelationKind,
