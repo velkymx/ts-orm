@@ -12,6 +12,20 @@ import * as sql from 'mssql';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { mssql as mssqlDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult } from '../driver.js';
+import { OrmError, type OrmErrorCode } from '../errors.js';
+
+const NUMBERS: Record<number, OrmErrorCode> = {
+  2627: 'duplicate',
+  2601: 'duplicate',
+  547: 'foreign_key',
+  515: 'not_null',
+};
+
+/** Normalize an mssql error (SQL Server number) into an OrmError. */
+export function mapMssqlError(error: unknown): OrmError {
+  const number = (error as { number?: number }).number;
+  return new OrmError((number !== undefined && NUMBERS[number]) || 'unknown', error);
+}
 
 let pool: sql.ConnectionPool | null = null;
 let overrides: Partial<DbConfig> | null = null;
@@ -53,20 +67,28 @@ export function createMssqlDriver(): Driver {
     dialect: mssqlDialect,
 
     async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
-      const request = (await getPool()).request();
-      bind(request, params);
-      const result = await request.query<Row>(text);
-      return result.recordset;
+      try {
+        const request = (await getPool()).request();
+        bind(request, params);
+        const result = await request.query<Row>(text);
+        return result.recordset;
+      } catch (error) {
+        throw mapMssqlError(error);
+      }
     },
 
     async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
-      const request = (await getPool()).request();
-      bind(request, params);
-      const result = await request.query(text);
-      const affectedRows = result.rowsAffected.reduce((sum, n) => sum + n, 0);
-      const firstRow: Record<string, unknown> | undefined = result.recordset?.[0];
-      const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
-      return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+      try {
+        const request = (await getPool()).request();
+        bind(request, params);
+        const result = await request.query(text);
+        const affectedRows = result.rowsAffected.reduce((sum, n) => sum + n, 0);
+        const firstRow: Record<string, unknown> | undefined = result.recordset?.[0];
+        const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
+        return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+      } catch (error) {
+        throw mapMssqlError(error);
+      }
     },
 
     async close(): Promise<void> {
