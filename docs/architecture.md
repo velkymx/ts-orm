@@ -15,6 +15,11 @@
   throw `NotFoundError`.
 - Zero-dependency core. Engine clients (`mysql2`, `pg`, `mssql`) sit
   behind the `Driver` contract; SQLite adds nothing on Node 24+.
+- Zero-setup default. `createDefaultDriver()` picks the engine from
+  `DB_DIALECT` (mysql, postgres, sqlite, mssql; mysql when unset) and
+  opens nothing until first use, so import plus env is the whole setup.
+  The sqlite default is an ephemeral `:memory:` database unless `DB_FILE`
+  names a file.
 - Errors are safe by default. Driver failures map to `OrmError` codes
   with client-safe messages; full detail goes to an injectable logger.
 - Erasable syntax only. Sources use no `enum`, `namespace`, parameter
