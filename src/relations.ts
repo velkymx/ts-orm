@@ -278,7 +278,8 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
           const record = link as Record<string, unknown>;
           const target = byTarget.get(record[rel.relatedKey as string] as BindValue);
           if (target !== undefined) {
-            (out.get(record[rel.foreignKey as string] as BindValue) as RowOf<TF>[]).push(target);
+            const bucket = out.get(record[rel.foreignKey as string] as BindValue);
+            if (bucket) bucket.push(target);
           }
         }
       }
@@ -299,7 +300,8 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
         }
         for (const child of children) {
           const key = (child as Record<string, unknown>)[rel.idColumn as string] as BindValue;
-          (out.get(key) as RowOf<TF>[]).push(child);
+          const bucket = out.get(key);
+          if (bucket) bucket.push(child);
         }
       }
       return out;
