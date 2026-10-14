@@ -7,7 +7,7 @@
 import * as pg from 'pg';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { postgres as postgresDialect } from '../dialect.js';
-import type { BindValue, Driver, ExecuteResult } from '../driver.js';
+import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
 import { OrmError, type OrmErrorCode } from '../errors.js';
 
 const CODES: Record<string, OrmErrorCode> = {
@@ -78,6 +78,49 @@ export function createPostgresDriver(): Driver {
         await pool.end();
         pool = null;
       }
+    },
+
+    async beginTransaction(): Promise<TxConnection> {
+      const client = await getPool().connect();
+      await client.query('BEGIN');
+      return {
+        dialect: postgresDialect,
+
+        async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
+          try {
+            const result = await client.query(text, params as unknown[]);
+            return result.rows as Row[];
+          } catch (error) {
+            throw mapPostgresError(error);
+          }
+        },
+
+        async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
+          try {
+            const result = await client.query(text, params as unknown[]);
+            const affectedRows = result.rowCount ?? 0;
+            const firstRow: Record<string, unknown> | undefined = result.rows[0];
+            const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
+            return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+          } catch (error) {
+            throw mapPostgresError(error);
+          }
+        },
+
+        async close(): Promise<void> {},
+
+        async commit(): Promise<void> {
+          await client.query('COMMIT');
+        },
+
+        async rollback(): Promise<void> {
+          await client.query('ROLLBACK');
+        },
+
+        async release(): Promise<void> {
+          client.release();
+        },
+      };
     },
   };
 }

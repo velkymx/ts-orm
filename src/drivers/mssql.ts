@@ -11,7 +11,7 @@
 import * as sql from 'mssql';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { mssql as mssqlDialect } from '../dialect.js';
-import type { BindValue, Driver, ExecuteResult } from '../driver.js';
+import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
 import { OrmError, type OrmErrorCode } from '../errors.js';
 
 const NUMBERS: Record<number, OrmErrorCode> = {
@@ -62,6 +62,16 @@ function bind(request: sql.Request, params: readonly BindValue[]): void {
   params.forEach((value, index) => request.input(`p${index + 1}`, value));
 }
 
+/** Normalize an mssql result into the engine-agnostic write outcome. */
+function toExecuteResult(result: sql.IResult<unknown>): ExecuteResult {
+  const affectedRows = result.rowsAffected.reduce((sum, n) => sum + n, 0);
+  const firstRow: Record<string, unknown> | undefined = result.recordset?.[0] as
+    | Record<string, unknown>
+    | undefined;
+  const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
+  return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+}
+
 export function createMssqlDriver(): Driver {
   return {
     dialect: mssqlDialect,
@@ -82,10 +92,7 @@ export function createMssqlDriver(): Driver {
         const request = (await getPool()).request();
         bind(request, params);
         const result = await request.query(text);
-        const affectedRows = result.rowsAffected.reduce((sum, n) => sum + n, 0);
-        const firstRow: Record<string, unknown> | undefined = result.recordset?.[0];
-        const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
-        return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+        return toExecuteResult(result);
       } catch (error) {
         throw mapMssqlError(error);
       }
@@ -96,6 +103,48 @@ export function createMssqlDriver(): Driver {
         await pool.close();
         pool = null;
       }
+    },
+
+    async beginTransaction(): Promise<TxConnection> {
+      const tx = new sql.Transaction(await getPool());
+      await tx.begin();
+      return {
+        dialect: mssqlDialect,
+
+        async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
+          try {
+            const request = new sql.Request(tx);
+            bind(request, params);
+            const result = await request.query<Row>(text);
+            return result.recordset;
+          } catch (error) {
+            throw mapMssqlError(error);
+          }
+        },
+
+        async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
+          try {
+            const request = new sql.Request(tx);
+            bind(request, params);
+            const result = await request.query(text);
+            return toExecuteResult(result);
+          } catch (error) {
+            throw mapMssqlError(error);
+          }
+        },
+
+        async close(): Promise<void> {},
+
+        async commit(): Promise<void> {
+          await tx.commit();
+        },
+
+        async rollback(): Promise<void> {
+          await tx.rollback();
+        },
+
+        async release(): Promise<void> {},
+      };
     },
   };
 }

@@ -23,4 +23,20 @@ export interface Driver {
   execute(sql: string, params: readonly BindValue[]): Promise<ExecuteResult>;
   /** Release underlying resources. */
   close(): Promise<void>;
+  /** Check out a dedicated connection with an open transaction, when supported. */
+  beginTransaction?(): Promise<TxConnection>;
+}
+
+/**
+ * A dedicated transactional connection. Usable anywhere a Driver fits, plus
+ * commit, rollback, and release. Release must run exactly once per checkout,
+ * on every path including throw.
+ */
+export interface TxConnection extends Driver {
+  /** Commit the open transaction. */
+  commit(): Promise<void>;
+  /** Roll back the open transaction. */
+  rollback(): Promise<void>;
+  /** Return the connection to the pool. Runs after commit or rollback. */
+  release(): Promise<void>;
 }
