@@ -37,10 +37,18 @@ export interface ModelInstance<F extends Fields> {
   getChanges(): Partial<RowOf<F>>;
   /** A copy of the current attributes. */
   toRow(): RowOf<F>;
+  /**
+   * Affected rows of the last save, delete, restore, or forceDelete on this
+   * instance, null before any write runs. Zero means the write matched
+   * nothing; what that means for the flow is the caller's decision.
+   * Counts follow the engine: matched rows everywhere except MySQL, which
+   * reports changed rows unless CLIENT_FOUND_ROWS is set.
+   */
+  lastAffectedRows: number | null;
   /** Insert when keyless, else update dirty fields only. */
   save(driver?: Driver): Promise<this>;
   /** Delete the row for this instance's key. */
-  delete(driver?: Driver): Promise<void>;
+  delete(driver?: Driver): Promise<{ affectedRows: number }>;
   /**
    * Clear the soft delete stamp, hiding nothing and firing
    * restoring/restored. No-op when not trashed. Requires soft deletes.
@@ -51,7 +59,7 @@ export interface ModelInstance<F extends Fields> {
    * Idempotent: repeating after the row is gone still succeeds.
    * Requires soft deletes.
    */
-  forceDelete(driver?: Driver): Promise<void>;
+  forceDelete(driver?: Driver): Promise<{ affectedRows: number }>;
 }
 
 /** Class surface returned by defineModel: finders plus construction. */
@@ -181,6 +189,7 @@ export function defineModel<Table extends string, F extends Fields>(
 
     protected attributes: Row;
     protected original: Row;
+    lastAffectedRows: number | null = null;
 
     constructor(data: Partial<Row> = {}) {
       this.attributes = { ...(data as Row) };
@@ -381,6 +390,7 @@ export function defineModel<Table extends string, F extends Fields>(
         }
         this.attributes = castOut(stored, casts) as Row;
         this.original = { ...this.attributes };
+        this.lastAffectedRows = 1;
         await deliver(target, hooks, ['created', 'saved'], context(this.attributes, this.attributes));
         return this;
       }
@@ -403,13 +413,14 @@ export function defineModel<Table extends string, F extends Fields>(
         ...(storedChanges as Record<string, unknown>),
         [pk]: id,
       }, pk);
-      await target.execute(sql, params);
+      const written = await target.execute(sql, params);
+      this.lastAffectedRows = written.affectedRows;
       this.original = { ...this.attributes };
       await deliver(target, hooks, ['updated', 'saved'], context(this.attributes, changes));
       return this;
     }
 
-    async delete(drv?: Driver): Promise<void> {
+    async delete(drv?: Driver): Promise<{ affectedRows: number }> {
       const target = pick(drv);
       const hooks = hooksOf(this.constructor);
       const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
@@ -419,14 +430,16 @@ export function defineModel<Table extends string, F extends Fields>(
       const soft = softColumnOf(this.constructor, struct);
       if (soft !== null) {
         if (isTrashed(this.attributes as Record<string, unknown>)) {
-          return;
+          this.lastAffectedRows = 0;
+          return { affectedRows: 0 };
         }
         const casts = castsOf(this.constructor);
         const current = await freshRow(target, id);
         if (current !== null && isTrashed(current as Record<string, unknown>)) {
           this.attributes = castOut({ ...current }, casts) as Row;
           this.original = { ...this.attributes };
-          return;
+          this.lastAffectedRows = 0;
+          return { affectedRows: 0 };
         }
         await runHooks(hooks, 'deleting', context(this.attributes, {}));
         const stamped = castIn({ [soft]: softStamp() }, casts)[soft];
@@ -434,25 +447,28 @@ export function defineModel<Table extends string, F extends Fields>(
           [pk]: id,
         });
         const written = await target.execute(sql, params);
+        this.lastAffectedRows = written.affectedRows;
         if (written.affectedRows === 0) {
           const latest = await freshRow(target, id);
           if (latest !== null) {
             this.attributes = castOut({ ...latest }, casts) as Row;
             this.original = { ...this.attributes };
           }
-          return;
+          return { affectedRows: 0 };
         }
         this.attributes = castOut({ ...(this.attributes as Record<string, unknown>), [soft]: stamped }, casts) as Row;
         this.original = { ...this.attributes };
         await deliver(target, hooks, ['deleted'], context(this.attributes, {}));
-        return;
+        return { affectedRows: written.affectedRows };
       }
       await runHooks(hooks, 'deleting', context(this.attributes, {}));
       const result = await remove(target, struct, key, id);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
+      this.lastAffectedRows = result.data.affectedRows;
       await deliver(target, hooks, ['deleted'], context(this.attributes, {}));
+      return { affectedRows: result.data.affectedRows };
     }
 
     async restore(drv?: Driver): Promise<this> {
@@ -467,17 +483,20 @@ export function defineModel<Table extends string, F extends Fields>(
         throw new Error('Cannot restore a model without a primary key value');
       }
       if (!isTrashed(this.attributes as Record<string, unknown>)) {
+        this.lastAffectedRows = 0;
         return this;
       }
       const current = await freshRow(target, id);
       if (current !== null && !isTrashed(current as Record<string, unknown>)) {
         this.attributes = castOut({ ...current }, castsOf(this.constructor)) as Row;
         this.original = { ...this.attributes };
+        this.lastAffectedRows = 0;
         return this;
       }
       await runHooks(hooks, 'restoring', context(this.attributes, { [soft]: null } as Partial<Row>));
       const { sql, params } = buildSoftRestore(target.dialect, struct, soft, { [pk]: id });
       const written = await target.execute(sql, params);
+      this.lastAffectedRows = written.affectedRows;
       if (written.affectedRows === 0) {
         const latest = await freshRow(target, id);
         if (latest !== null) {
@@ -492,7 +511,7 @@ export function defineModel<Table extends string, F extends Fields>(
       return this;
     }
 
-    async forceDelete(drv?: Driver): Promise<void> {
+    async forceDelete(drv?: Driver): Promise<{ affectedRows: number }> {
       const target = pick(drv);
       const hooks = hooksOf(this.constructor);
       const soft = softColumnOf(this.constructor, struct);
@@ -508,7 +527,9 @@ export function defineModel<Table extends string, F extends Fields>(
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
+      this.lastAffectedRows = result.data.affectedRows;
       await deliver(target, hooks, ['forceDeleted'], context(this.attributes, {}));
+      return { affectedRows: result.data.affectedRows };
     }
   }
 

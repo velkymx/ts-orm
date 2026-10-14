@@ -125,6 +125,33 @@ describe('defineModel (issue 23)', () => {
     await driver.close();
   });
 
+  it('save on a concurrently removed row surfaces zero instead of throwing', async () => {
+    const driver = await setup();
+    class User extends defineModel(driver, UserStruct) {}
+    await User.create({ name: 'bob' });
+    const u = (await User.find(1))!;
+    expect(u.lastAffectedRows).toBeNull();
+    await driver.execute('DELETE FROM "users" WHERE "id" = ?', [1]);
+    u.fill({ age: 31 });
+    await expect(u.save()).resolves.toBe(u);
+    expect(u.lastAffectedRows).toBe(0);
+    await driver.close();
+  });
+
+  it('delete reports the affected rows instead of throwing on a miss', async () => {
+    const driver = await setup();
+    class User extends defineModel(driver, UserStruct) {}
+    await User.create({ name: 'bob' });
+    const u = (await User.find(1))!;
+    await driver.execute('DELETE FROM "users" WHERE "id" = ?', [1]);
+    await expect(u.delete()).resolves.toEqual({ affectedRows: 0 });
+    expect(u.lastAffectedRows).toBe(0);
+    const v = await User.create({ name: 'amy' });
+    await expect(v.delete()).resolves.toEqual({ affectedRows: 1 });
+    expect(v.lastAffectedRows).toBe(1);
+    await driver.close();
+  });
+
   it('query exposes the fluent builder for raw rows', async () => {
     const driver = await setup();
     class User extends defineModel(driver, UserStruct) {}
