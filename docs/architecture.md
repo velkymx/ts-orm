@@ -84,7 +84,9 @@ Per-engine differences live in exactly four places, all on `Dialect`:
 
 Connections are pooled per engine and created lazily: the MySQL pool on
 first use with explicit `configure`, Postgres and MSSQL pools inside
-their drivers, SQLite as a single embedded handle. `closePool` and
+their drivers, SQLite as a single embedded handle. Importing the
+library loads `.env` once (never overriding already set variables), so
+pool settings resolve with no manual dotenv bootstrap. `closePool` and
 `driver.close` release everything so processes exit cleanly.
 
 Transactions check out a dedicated connection, run `BEGIN`, then commit
