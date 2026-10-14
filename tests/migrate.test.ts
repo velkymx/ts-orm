@@ -127,6 +127,7 @@ describe('tracking sql per dialect (issue 24)', () => {
     );
     expect(trackingSql(postgres).deleteRow).toBe('DELETE FROM "tsorm_migrations" WHERE "name" = $1');
     expect(trackingSql(mssql).createTable).toContain('[name] VARCHAR(255) NOT NULL PRIMARY KEY');
+    expect(trackingSql(mssql).createTable.startsWith('IF OBJECT_ID')).toBe(true);
     expect(trackingSql(mssql).insertRow).toContain('@p1, @p2, @p3');
     expect(trackingSql(sqlite).selectAll).toBe(
       'SELECT "name", "batch" FROM "tsorm_migrations" ORDER BY "name"',

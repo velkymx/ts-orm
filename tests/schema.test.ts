@@ -38,7 +38,7 @@ describe('create table (issue 24)', () => {
         '"made" TEXT DEFAULT CURRENT_TIMESTAMP)',
     );
     expect(buildCreateTable(mssql, 'posts', POSTS)).toBe(
-      'CREATE TABLE IF NOT EXISTS [posts] ([id] INT IDENTITY(1,1) PRIMARY KEY, ' +
+      'IF OBJECT_ID(N\'posts\', N\'U\') IS NULL CREATE TABLE [posts] ([id] INT IDENTITY(1,1) PRIMARY KEY, ' +
         '[title] VARCHAR(120) NOT NULL, [published] BIT NOT NULL DEFAULT 0, ' +
         '[made] DATETIME2 DEFAULT CURRENT_TIMESTAMP)',
     );

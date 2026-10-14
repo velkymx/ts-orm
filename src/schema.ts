@@ -187,9 +187,11 @@ function columnSql(dialect: Dialect, name: string, column: ColumnDef): string {
 }
 
 /**
- * CREATE TABLE with IF NOT EXISTS, so a retried migration never fails on
- * an already built table. Auto-increment primary keys use each engine's
- * native identity strategy.
+ * CREATE TABLE guarded for safe retries, so a retried migration never
+ * fails on an already built table. MySQL, Postgres, and SQLite use
+ * IF NOT EXISTS; SQL Server has no such clause, so the statement is
+ * wrapped in an OBJECT_ID null guard instead. Auto-increment primary
+ * keys use each engine's native identity strategy.
  */
 export function buildCreateTable(
   dialect: Dialect,
@@ -201,7 +203,11 @@ export function buildCreateTable(
     throw new Error('createTable needs at least one column');
   }
   const defs = names.map((name) => columnSql(dialect, name, columns[name] as ColumnDef));
-  return `CREATE TABLE IF NOT EXISTS ${safeIdentifier(table, dialect, 'table name')} (${defs.join(', ')})`;
+  const qualified = safeIdentifier(table, dialect, 'table name');
+  if (dialect.name === 'mssql') {
+    return `IF OBJECT_ID(N'${table}', N'U') IS NULL CREATE TABLE ${qualified} (${defs.join(', ')})`;
+  }
+  return `CREATE TABLE IF NOT EXISTS ${qualified} (${defs.join(', ')})`;
 }
 
 /** ALTER TABLE ADD COLUMN (ADD on MSSQL, which rejects the COLUMN keyword). */

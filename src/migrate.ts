@@ -4,8 +4,9 @@
  * succeeds, so a rerun only attempts what is missing. Rollback reverses
  * the latest batch in reverse order. DDL is not transactional on every
  * engine (MySQL commits DDL implicitly), so tracking writes follow the
- * migration, and builders favor IF NOT EXISTS for safe retries. The
- * `up` of one migration never depends on uncommitted later work.
+ * migration, and builders guard creation (IF NOT EXISTS, or an OBJECT_ID
+ * guard on SQL Server) for safe retries. The `up` of one migration never
+ * depends on uncommitted later work.
  */
 
 import type { BindValue, Driver } from './driver.js';
@@ -73,8 +74,7 @@ export function trackingSql(dialect: Dialect): TrackingSql {
 }
 
 /** Create the tracking table when absent, then read applied names to batches. */
-async function appliedBatches(driver: Driver): Promise<Map<string, number>> {
-  const sql = trackingSql(driver.dialect);
+async function appliedBatches(driver: Driver, sql: TrackingSql): Promise<Map<string, number>> {
   await driver.execute(sql.createTable, []);
   const rows = await driver.query<Record<string, unknown>>(sql.selectAll, []);
   const out = new Map<string, number>();
@@ -91,18 +91,18 @@ async function appliedBatches(driver: Driver): Promise<Map<string, number>> {
  */
 export async function migrate(driver: Driver, migrations: readonly Migration[]): Promise<MigrateResult> {
   const ordered = [...migrations].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  const applied = await appliedBatches(driver);
+  const sql = trackingSql(driver.dialect);
+  const applied = await appliedBatches(driver, sql);
   const pending = ordered.filter((m) => !applied.has(m.name));
   if (pending.length === 0) {
     return { applied: [], batch: 0 };
   }
-  const table = trackingSql(driver.dialect);
   const batches = [...applied.values()];
   const batch = (batches.length > 0 ? Math.max(...batches) : 0) + 1;
   const names: string[] = [];
   for (const migration of pending) {
     await migration.up(driver);
-    await driver.execute(table.insertRow, [
+    await driver.execute(sql.insertRow, [
       migration.name,
       batch,
       timestampNow(),
@@ -125,11 +125,11 @@ export async function rollback(
   opts: { batches?: number } = {},
 ): Promise<RollbackResult> {
   const count = opts.batches ?? 1;
-  const applied = await appliedBatches(driver);
+  const sql = trackingSql(driver.dialect);
+  const applied = await appliedBatches(driver, sql);
   if (applied.size === 0) {
     return { reverted: [] };
   }
-  const sql = trackingSql(driver.dialect);
   const latest = Math.max(...applied.values());
   const floor = latest - count + 1;
   const names = [...applied.entries()]

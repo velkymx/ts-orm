@@ -72,7 +72,8 @@ schema-builder column definitions.
 ## Schema and migrations
 
 The schema builder compiles DDL per dialect from one column
-description: `buildCreateTable` (always IF NOT EXISTS), `buildAddColumn`
+description: `buildCreateTable` guarded for safe retries (IF NOT EXISTS,
+or an OBJECT_ID guard on SQL Server), `buildAddColumn`
 and `buildDropColumn`, `buildCreateIndex` and `buildDropIndex`, plus
 `buildAddForeignKey` on engines that allow post-creation constraints
 (SQLite throws; define references inline instead). Auto-increment
