@@ -27,6 +27,10 @@ export interface ColumnDef {
   readonly primaryKey?: boolean;
   readonly autoIncrement?: boolean;
   readonly unique?: boolean;
+  /**
+   * Allowed values. MySQL enforces ENUM natively; other engines store
+   * TEXT (VARCHAR on MSSQL) and rely on app-side validation instead.
+   */
   readonly enum?: readonly string[];
   readonly references?: ReferenceDef;
 }

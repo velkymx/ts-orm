@@ -9,8 +9,10 @@
  */
 
 import type { BindValue, Driver } from './driver.js';
+import type { Dialect } from './dialect.js';
 import { timestampNow } from './lifecycle.js';
 import { safeIdentifier } from './identifiers.js';
+import { buildCreateTable } from './schema.js';
 
 /** Tracking table holding applied migration names and batches. */
 export const MIGRATIONS_TABLE = 'tsorm_migrations';
@@ -36,17 +38,45 @@ export interface RollbackResult {
   readonly reverted: string[];
 }
 
+/** The runner's tracking statements, compiled per dialect. */
+export interface TrackingSql {
+  readonly createTable: string;
+  readonly selectAll: string;
+  readonly insertRow: string;
+  readonly deleteRow: string;
+}
+
+/**
+ * Tracking statements for a dialect. The table itself is built with the
+ * schema builder, so identifier quoting, the key-safe name type, and
+ * parameter markers all follow the engine: MySQL gets a VARCHAR primary
+ * key (TEXT keys are illegal there), and Postgres/MSSQL get their own
+ * placeholders instead of `?`.
+ */
+export function trackingSql(dialect: Dialect): TrackingSql {
+  const table = safeIdentifier(MIGRATIONS_TABLE, dialect, 'table name');
+  const name = safeIdentifier('name', dialect, 'column name');
+  const batch = safeIdentifier('batch', dialect, 'column name');
+  const appliedAt = safeIdentifier('applied_at', dialect, 'column name');
+  return {
+    createTable: buildCreateTable(dialect, MIGRATIONS_TABLE, {
+      name: { type: 'string', length: 255, required: true, primaryKey: true },
+      batch: { type: 'number', required: true },
+      applied_at: { type: 'datetime', required: true },
+    }),
+    selectAll: `SELECT ${name}, ${batch} FROM ${table} ORDER BY ${name}`,
+    insertRow:
+      `INSERT INTO ${table} (${name}, ${batch}, ${appliedAt}) ` +
+      `VALUES (${dialect.placeholder(1)}, ${dialect.placeholder(2)}, ${dialect.placeholder(3)})`,
+    deleteRow: `DELETE FROM ${table} WHERE ${name} = ${dialect.placeholder(1)}`,
+  };
+}
+
 /** Create the tracking table when absent, then read applied names to batches. */
 async function appliedBatches(driver: Driver): Promise<Map<string, number>> {
-  const table = safeIdentifier(MIGRATIONS_TABLE, driver.dialect, 'table name');
-  await driver.execute(
-    `CREATE TABLE IF NOT EXISTS ${table} ("name" TEXT PRIMARY KEY, "batch" INTEGER NOT NULL, "applied_at" TEXT NOT NULL)`,
-    [],
-  );
-  const rows = await driver.query<Record<string, unknown>>(
-    `SELECT "name", "batch" FROM ${table} ORDER BY "name"`,
-    [],
-  );
+  const sql = trackingSql(driver.dialect);
+  await driver.execute(sql.createTable, []);
+  const rows = await driver.query<Record<string, unknown>>(sql.selectAll, []);
   const out = new Map<string, number>();
   for (const row of rows) {
     out.set(row['name'] as string, row['batch'] as number);
@@ -66,13 +96,13 @@ export async function migrate(driver: Driver, migrations: readonly Migration[]):
   if (pending.length === 0) {
     return { applied: [], batch: 0 };
   }
-  const table = safeIdentifier(MIGRATIONS_TABLE, driver.dialect, 'table name');
+  const table = trackingSql(driver.dialect);
   const batches = [...applied.values()];
   const batch = (batches.length > 0 ? Math.max(...batches) : 0) + 1;
   const names: string[] = [];
   for (const migration of pending) {
     await migration.up(driver);
-    await driver.execute(`INSERT INTO ${table} ("name", "batch", "applied_at") VALUES (?, ?, ?)`, [
+    await driver.execute(table.insertRow, [
       migration.name,
       batch,
       timestampNow(),
@@ -84,8 +114,10 @@ export async function migrate(driver: Driver, migrations: readonly Migration[]):
 
 /**
  * Reverse the latest batch (or the given number of batches), newest
- * first. Every reverted name must resolve to a passed definition;
- * unknown names throw instead of guessing.
+ * first. Ordering is by migration name, so timestamp prefixes are the
+ * contract: non-chronological names roll back in name order. Every
+ * reverted name must resolve to a passed definition; unknown names throw
+ * instead of guessing.
  */
 export async function rollback(
   driver: Driver,
@@ -97,7 +129,7 @@ export async function rollback(
   if (applied.size === 0) {
     return { reverted: [] };
   }
-  const table = safeIdentifier(MIGRATIONS_TABLE, driver.dialect, 'table name');
+  const sql = trackingSql(driver.dialect);
   const latest = Math.max(...applied.values());
   const floor = latest - count + 1;
   const names = [...applied.entries()]
@@ -113,7 +145,7 @@ export async function rollback(
       throw new Error(`cannot roll back "${name}": no matching migration was passed`);
     }
     await migration.down(driver);
-    await driver.execute(`DELETE FROM ${table} WHERE "name" = ?`, [name] as BindValue[]);
+    await driver.execute(sql.deleteRow, [name] as BindValue[]);
     reverted.push(name);
   }
   return { reverted };

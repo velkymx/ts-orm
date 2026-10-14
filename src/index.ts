@@ -89,8 +89,8 @@ export {
   buildDropIndex,
   buildAddForeignKey,
 } from './schema.js';
-export type { Migration, MigrateResult, RollbackResult } from './migrate.js';
-export { MIGRATIONS_TABLE, migrate, rollback } from './migrate.js';
+export type { Migration, MigrateResult, RollbackResult, TrackingSql } from './migrate.js';
+export { MIGRATIONS_TABLE, migrate, rollback, trackingSql } from './migrate.js';
 
 export type {
   RelationKind,

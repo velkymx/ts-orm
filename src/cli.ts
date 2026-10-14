@@ -12,6 +12,8 @@
  */
 
 import { mkdirSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Driver } from './driver.js';
 import { OrmError, sanitizeError } from './errors.js';
 import { generateStructFromTable } from './introspect.js';
@@ -78,7 +80,10 @@ function stem(path: string): string {
 
 /** Dynamic import with an up/down shape check. */
 async function defaultImportMigration(path: string): Promise<Migration> {
-  const module = (await import(path)) as MigrationModule;
+  // Resolve against the caller's working directory as a file URL: a bare
+  // relative specifier would resolve against this module instead.
+  const url = pathToFileURL(resolve(process.cwd(), path)).href;
+  const module = (await import(url)) as MigrationModule;
   const candidate = (module.default ?? module.migration ?? module) as {
     up?: unknown;
     down?: unknown;

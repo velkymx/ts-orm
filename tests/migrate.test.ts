@@ -1,13 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSqliteDriver } from '../src/drivers/sqlite.js';
 import type { Driver } from '../src/driver.js';
-import { migrate, rollback, type Migration } from '../src/migrate.js';
+import { migrate, rollback, trackingSql, type Migration } from '../src/migrate.js';
 import { buildCreateTable, buildAddColumn, structColumns } from '../src/schema.js';
 import { defineStruct } from '../src/struct.js';
-import { sqlite } from '../src/dialect.js';
+import { mysql, postgres, sqlite, mssql } from '../src/dialect.js';
 import { runCli } from '../src/cli.js';
 
 const Post = defineStruct('posts', {
@@ -113,6 +113,27 @@ describe('migration runner (issue 24)', () => {
   });
 });
 
+describe('tracking sql per dialect (issue 24)', () => {
+  it('quotes identifiers and keys the name safely on every engine', () => {
+    expect(trackingSql(mysql).createTable).toBe(
+      'CREATE TABLE IF NOT EXISTS `tsorm_migrations` (`name` VARCHAR(255) NOT NULL PRIMARY KEY, ' +
+        '`batch` INT NOT NULL, `applied_at` DATETIME NOT NULL)',
+    );
+    expect(trackingSql(mysql).insertRow).toBe(
+      'INSERT INTO `tsorm_migrations` (`name`, `batch`, `applied_at`) VALUES (?, ?, ?)',
+    );
+    expect(trackingSql(postgres).insertRow).toBe(
+      'INSERT INTO "tsorm_migrations" ("name", "batch", "applied_at") VALUES ($1, $2, $3)',
+    );
+    expect(trackingSql(postgres).deleteRow).toBe('DELETE FROM "tsorm_migrations" WHERE "name" = $1');
+    expect(trackingSql(mssql).createTable).toContain('[name] VARCHAR(255) NOT NULL PRIMARY KEY');
+    expect(trackingSql(mssql).insertRow).toContain('@p1, @p2, @p3');
+    expect(trackingSql(sqlite).selectAll).toBe(
+      'SELECT "name", "batch" FROM "tsorm_migrations" ORDER BY "name"',
+    );
+  });
+});
+
 describe('migration cli (issue 24)', () => {
   // File-backed sqlite: runCli closes the driver in a finally, and a
   // :memory: database would reopen empty on the next command.
@@ -182,6 +203,68 @@ describe('migration cli (issue 24)', () => {
     const seen = cliDeps([]);
     expect(await runCli(['migrate:sideways'], seen.deps)).toBe(1);
     expect(seen.out.join('\n')).toContain('Usage:');
+    await seen.driver.close();
+  });
+});
+
+describe('default migration loader (issue 24)', () => {
+  let dir = '';
+  afterEach(() => {
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+      dir = '';
+    }
+  });
+
+  function loaderDeps(): {
+    deps: Parameters<typeof runCli>[1];
+    out: string[];
+    err: string[];
+    driver: Driver;
+  } {
+    const out: string[] = [];
+    const err: string[] = [];
+    dir = mkdtempSync(join(tmpdir(), 'tsorm-loader-'));
+    const driver = createSqliteDriver({ filename: join(dir, 'loader.db') });
+    return {
+      deps: {
+        createDriver: () => driver,
+        writeFile: (path, data) => void writeFileSync(path, data),
+        makeDir: () => {},
+        log: (m) => void out.push(m),
+        errorLog: (m) => void err.push(m),
+        migrationsDir: dir,
+      },
+      out,
+      err,
+      driver,
+    };
+  }
+
+  it('migrates and rolls back real files through the default loader', async () => {
+    const seen = loaderDeps();
+    writeFileSync(
+      join(dir, '20240101000000_create_widgets.mjs'),
+      'export async function up(driver) {\n' +
+        '  await driver.execute(\'CREATE TABLE IF NOT EXISTS "widgets" ("id" INTEGER PRIMARY KEY, "label" TEXT)\', []);\n' +
+        '}\n' +
+        'export async function down(driver) {\n' +
+        '  await driver.execute(\'DROP TABLE "widgets"\', []);\n' +
+        '}\n',
+    );
+    expect(await runCli(['migrate'], seen.deps)).toBe(0);
+    expect(await tables(seen.driver)).toContain('widgets');
+    expect(seen.out.join('\n')).toContain('20240101000000_create_widgets');
+    expect(await runCli(['migrate:rollback'], seen.deps)).toBe(0);
+    expect(await tables(seen.driver)).not.toContain('widgets');
+    await seen.driver.close();
+  });
+
+  it('fails friendly when a file lacks up and down', async () => {
+    const seen = loaderDeps();
+    writeFileSync(join(dir, '20240101000000_empty.mjs'), 'export const nothing = 1;\n');
+    expect(await runCli(['migrate'], seen.deps)).toBe(1);
+    expect(seen.err.join('\n')).toContain('up and down');
     await seen.driver.close();
   });
 });
