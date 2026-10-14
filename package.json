@@ -69,7 +69,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "hygiene": "node scripts/check-hygiene.mjs",
     "postbuild": "chmod +x dist/bin/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
