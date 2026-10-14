@@ -58,6 +58,14 @@ npx ts-orm struct users
 
 It connects through the environment (`DB_HOST`, `DB_USER`, `DB_DATABASE`, and optionally `DB_PASSWORD` and `DB_PORT`) and writes the mapped fields to `./users.json`, ready to fold into `defineStruct`. On a bad table name or a failed connection it prints a message and exits non-zero.
 
+Skip the hand-writing with a model scaffold:
+
+```bash
+npx ts-orm model users
+```
+
+It writes `./users.struct.ts` (regenerated on every run) plus `./Users.ts`, a driver-free model subclass you own. Rerunning refreshes the struct and leaves your model file untouched unless you pass `--force`.
+
 Version the schema from code:
 
 ```bash
