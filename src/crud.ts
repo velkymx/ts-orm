@@ -166,6 +166,11 @@ export function buildSelectWith<Table extends string, F extends Fields>(
     .join(' ');
 
   const keys = Object.keys(conditions);
+  for (const key of keys) {
+    if (!(key in struct.fields)) {
+      throw new Error(`Unknown column "${key}" for table "${struct.table}": conditions target the main table`);
+    }
+  }
   const params = keys.map((key) => conditions[key] as BindValue);
   const where = keys.length
     ? ` WHERE ${keys

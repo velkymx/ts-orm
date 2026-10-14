@@ -46,6 +46,18 @@ describe('buildSelectWith', () => {
       buildSelectWith(mysql, User, [{ table: 'posts', on: ['users.id', 'bad; DROP'] }], {}, {}),
     ).toThrow();
   });
+
+  it('rejects conditions on unknown columns naming the column and table', () => {
+    expect(() =>
+      buildSelectWith(
+        mysql,
+        User,
+        [{ table: 'posts', on: ['users.id', 'posts.user_id'] }],
+        { title: 'hello' },
+        {},
+      ),
+    ).toThrow(/title.*users/);
+  });
 });
 
 describe('readWith (SQLite integration)', () => {
