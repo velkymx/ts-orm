@@ -7,7 +7,7 @@
 import type { Dialect } from './dialect.js';
 import { safeIdentifier } from './identifiers.js';
 import type { BindValue, Driver } from './driver.js';
-import type { Fields, InsertOf, RowOf, Struct } from './struct.js';
+import type { Fields, InsertOf, RowOf, Struct, UpdateOf } from './struct.js';
 import { validatePayload } from './validation.js';
 import { ok, fail, type Result } from './result.js';
 
@@ -141,6 +141,94 @@ export async function create<Table extends string, F extends Fields>(
     const { sql, params } = buildInsert(driver.dialect, struct, data);
     const result = await driver.execute(sql, params);
     return ok({ id: result.insertId }, 'Record created');
+  } catch (error) {
+    return fail('Database operation failed', [(error as Error).message]);
+  }
+}
+
+/** Column names (excluding the id) that carry a value to write. */
+function updatableColumns(
+  fields: Fields,
+  payload: Record<string, unknown>,
+  idKey: string,
+): string[] {
+  return Object.keys(fields).filter(
+    (name) => name !== idKey && payload[name] !== undefined,
+  );
+}
+
+/** Build an UPDATE that sets the supplied columns and filters on the id. */
+export function buildUpdate<Table extends string, F extends Fields>(
+  dialect: Dialect,
+  struct: Struct<Table, F>,
+  payload: Record<string, unknown>,
+  idKey: string,
+): BuiltStatement {
+  const names = updatableColumns(struct.fields, payload, idKey);
+  const assignments = names
+    .map((name, i) => `${safeIdentifier(name, dialect, 'column name')} = ${dialect.placeholder(i + 1)}`)
+    .join(', ');
+  const table = safeIdentifier(struct.table, dialect, 'table name');
+  const idColumn = safeIdentifier(idKey, dialect, 'id column name');
+  const sql = `UPDATE ${table} SET ${assignments} WHERE ${idColumn} = ${dialect.placeholder(names.length + 1)}`;
+  const params = [...names.map((name) => payload[name] as BindValue), payload[idKey] as BindValue];
+  return { sql, params };
+}
+
+/** Build a DELETE that filters on the id column. */
+export function buildDelete<Table extends string, F extends Fields>(
+  dialect: Dialect,
+  struct: Struct<Table, F>,
+  idKey: string,
+): string {
+  const table = safeIdentifier(struct.table, dialect, 'table name');
+  const idColumn = safeIdentifier(idKey, dialect, 'id column name');
+  return `DELETE FROM ${table} WHERE ${idColumn} = ${dialect.placeholder(1)}`;
+}
+
+/** Update a record by id, writing only the columns present in the payload. */
+export async function update<Table extends string, F extends Fields>(
+  driver: Driver,
+  struct: Struct<Table, F>,
+  payload: UpdateOf<F>,
+  idKey: keyof F & string = 'id' as keyof F & string,
+): Promise<Result<{ affectedRows: number }>> {
+  const data = payload as Record<string, unknown>;
+  const errors = validatePayload(struct.fields, data, { partial: true });
+  if (errors.length > 0) {
+    return fail('Validation failed', errors.map((e) => e.message));
+  }
+  if (data[idKey] === undefined || data[idKey] === null) {
+    return fail('id value is required');
+  }
+  if (updatableColumns(struct.fields, data, idKey).length === 0) {
+    return fail('No fields to update');
+  }
+
+  try {
+    const { sql, params } = buildUpdate(driver.dialect, struct, data, idKey);
+    const result = await driver.execute(sql, params);
+    return ok({ affectedRows: result.affectedRows }, 'Record updated');
+  } catch (error) {
+    return fail('Database operation failed', [(error as Error).message]);
+  }
+}
+
+/** Delete a record by its id column value. */
+export async function remove<Table extends string, F extends Fields>(
+  driver: Driver,
+  struct: Struct<Table, F>,
+  idKey: keyof F & string,
+  idValue: BindValue,
+): Promise<Result<{ affectedRows: number }>> {
+  if (idValue === undefined || idValue === null) {
+    return fail('id value is required');
+  }
+
+  try {
+    const sql = buildDelete(driver.dialect, struct, idKey);
+    const result = await driver.execute(sql, [idValue]);
+    return ok({ affectedRows: result.affectedRows }, 'Record deleted');
   } catch (error) {
     return fail('Database operation failed', [(error as Error).message]);
   }
