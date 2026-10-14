@@ -17,6 +17,7 @@ import {
   readOne,
   remove,
 } from './crud.js';
+import { validatePayload } from './validation.js';
 import type { BindValue, Driver } from './driver.js';
 import { getDefaultDriver } from './default-driver.js';
 import { deliver, runHooks, timestampHooks, type HookContext, type ModelHooks } from './lifecycle.js';
@@ -382,6 +383,12 @@ export function defineModel<Table extends string, F extends Fields>(
       await runHooks(stamps, 'updating', live(this.attributes, pending));
       const changes = this.getChanges();
       const storedChanges = castIn({ ...(changes as Record<string, unknown>) }, casts);
+      const violations = validatePayload(struct.fields, storedChanges as Record<string, unknown>, {
+        partial: true,
+      });
+      if (violations.length > 0) {
+        throw new Error(failMessage('Validation failed', violations.map((v) => v.message)));
+      }
       const { sql, params } = buildUpdate(target.dialect, struct, {
         ...(storedChanges as Record<string, unknown>),
         [pk]: id,
