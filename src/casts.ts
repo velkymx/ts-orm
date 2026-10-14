@@ -160,5 +160,23 @@ export function valuesEqual(a: unknown, b: unknown): boolean {
   const right = toBool(b);
   if (left !== undefined && right !== undefined) return left === right;
   if (left !== undefined || right !== undefined) return false;
-  return JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
+  return JSON.stringify(canonical(comparable(a))) === JSON.stringify(canonical(comparable(b)));
+}
+
+/**
+ * Deeply sort object keys so representation order never counts as dirty.
+ * Arrays keep order (JSON array order is significant) and Dates pass
+ * through for the standard ISO serialization.
+ */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value instanceof Date) return value;
+  if (typeof value === 'object' && value !== null) {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      out[key] = canonical((value as Record<string, unknown>)[key]);
+    }
+    return out;
+  }
+  return value;
 }
