@@ -74,6 +74,17 @@ describe('cast pipeline (issue 81)', () => {
     expect(valuesEqual(null, 0)).toBe(false);
   });
 
+  it('parses naive stamps as UTC regardless of local timezone', () => {
+    const prev = process.env['TZ'];
+    process.env['TZ'] = 'America/New_York';
+    try {
+      expect(valuesEqual(new Date('2024-05-01T10:00:00Z'), '2024-05-01 10:00:00')).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = prev;
+    }
+  });
+
   it('ignores JSON key order but respects array order', () => {
     expect(valuesEqual({ a: 1, b: 2 }, '{"b":2,"a":1}')).toBe(true);
     expect(valuesEqual({ o: { x: 1, y: [1, 2] } }, '{"o":{"y":[1,2],"x":1}}')).toBe(true);

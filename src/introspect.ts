@@ -38,6 +38,8 @@ const TYPE_MAP: Record<string, FieldType> = {
   text: 'string',
   date: 'date',
   datetime: 'datetime',
+  // TIMESTAMP shares the datetime cast, which reads UTC. Only correct under
+  // a UTC session; the engine converts TIMESTAMP across session time zones.
   timestamp: 'datetime',
   enum: 'enum',
   json: 'string',
