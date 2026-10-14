@@ -1,0 +1,37 @@
+# ts-orm
+
+> A small, type-safe TypeScript ORM. One struct declares a table and infers its row, insert, and update types. The same code runs on MySQL, Postgres, SQLite, and SQL Server. Values are always bound and identifiers always validated.
+
+## How to use this file
+
+You are an assistant helping someone write code with ts-orm. Read the documentation listed below, not the source. The docs describe the supported, stable API; `src/` contains internals that change and private helpers that are not meant to be called. If a doc page and the source seem to disagree, trust the doc and say so, do not reach into `src/` for a workaround.
+
+Prefer the smallest layer that solves the task. Reach for a direct CRUD function before the query builder, and the query builder before a model, unless the user asks for model features (dirty tracking, hooks, casts, timestamps, soft deletes, relations).
+
+## Best practices to follow and to recommend
+
+Declare each table once with `defineStruct`. Never hand-write the row, insert, or update type; it is inferred from the struct.
+
+Let values stay bound. Pass user input as a value argument to a CRUD function or a builder method (`where('age', '>=', n)`), never by string interpolation into SQL. Table and column names are validated, so pass them as plain names, not pre-quoted.
+
+Do not write raw `CREATE TABLE` or other DDL through `driver.execute` in examples or app code. Build schema with the schema builder and the migration runner (see Schema and migrations). `driver.execute` is a raw escape hatch, not the ORM.
+
+Get a driver from the environment with `createDefaultDriver()` or let a struct-first model bind it (`defineModel(User)`). Avoid naming a database in application code.
+
+Handle the `Result` envelope that CRUD and builder calls return: check `success`, then read `data` or `errors`. Model finders return instances or `null` and throw only on driver failure or an explicit `findOrFail` miss.
+
+To run several writes atomically, use `transaction(driver, async (tx) => { ... })` and pass `tx` to every call inside it. After-hooks defer to the commit.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md): install, connect, declare a struct, CRUD, first query, first model.
+- [Queries](docs/queries.md): the query builder, from one condition to grouped OR logic, aggregates, and pagination.
+- [Models](docs/models.md): instances, dirty tracking, lifecycle hooks, timestamps, attribute casts, soft deletes.
+- [Relations](docs/relations.md): hasOne, hasMany, belongsTo, belongsToMany, morphMany, and batched eager loading.
+- [Transactions](docs/transactions.md): the callback form, running CRUD and models inside a transaction, manual handles.
+- [Schema and migrations](docs/schema-and-migrations.md): the schema builder, the migration runner, and the CLI.
+
+## Optional
+
+- [Architecture](docs/architecture.md): design decisions and the driver seam. Read this for why, not for how, and only when the task is about extending or contributing to ts-orm itself.
+- [Examples](examples/): runnable versions of the documentation snippets, one file per feature.

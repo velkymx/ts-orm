@@ -1,6 +1,10 @@
 # ts-orm
 
-A small, type-safe TypeScript ORM. Declare each table once as a struct, then run the same code against MySQL, Postgres, SQLite, or SQL Server. Values are always bound, identifiers are always validated, and errors come back safe.
+ts-orm is a small, type-safe TypeScript ORM you can read in an afternoon. You declare each table once as a plain struct, and the library infers your row, insert, and update types from that single declaration. The shape in your database and the shape your editor checks never drift apart, because there is only one of them.
+
+It stays out of your way. No decorators, no code generation step, no base-class config to learn, and no runtime dependencies in the core. The same code runs on MySQL, Postgres, SQLite, and SQL Server, so you can build against an in-memory SQLite database and ship on Postgres without rewriting a single query. Every value is bound and every table and column name is validated before it reaches the database, so the usual injection mistakes are not even reachable.
+
+You pick the altitude. Direct functions handle the simple reads and writes, a fluent builder covers operators, grouped logic, joins, and pagination, and a model class gives you dirty tracking, hooks, casts, timestamps, soft deletes, and relations when you want an active-record feel. It does not try to be your whole backend: no auth, no caching, and no schema magic beyond an explicit migration runner. If you want a data layer that is type-safe, portable across engines, and small enough to keep in your head, keep reading.
 
 ```bash
 npm i @velkymx/ts-orm
@@ -30,11 +34,19 @@ if (user === null) {
 
 Hand a driver explicitly only to join a transaction (`Users.find(1, tx)`), or the read silently runs outside it.
 
-## What you get
+## Documentation
 
-The struct drives four layers that share one set of types. Direct CRUD functions (`create`, `read`, `update`, `remove`) handle one-call reads and writes. A fluent query builder covers operators, `OR` groups, `IN`, `BETWEEN`, `LIKE`, paging, and aggregates. A model base class adds dirty tracking, lifecycle hooks, attribute casts, automatic timestamps, and soft deletes. Relations load related rows in batched queries. Transactions commit on success and roll back on a throw. A schema builder and migration runner sit behind the `ts-orm` CLI.
+Read these in order the first time:
 
-Every write validates against the struct before it reaches the database, and every driver failure maps to a safe client message while the full detail goes to a logger you control.
+1. [Getting started](docs/getting-started.md): install, configure, your first model, your first query.
+2. [Queries](docs/queries.md): the query builder, from one condition to grouped logic and pagination.
+3. [Models](docs/models.md): instances, dirty tracking, hooks, timestamps, casts, and soft deletes.
+4. [Relations](docs/relations.md): hasMany, belongsTo, many-to-many, polymorphic, and eager loading.
+5. [Transactions](docs/transactions.md): the callback form, manual handles, and how hooks defer to commit.
+6. [Schema and migrations](docs/schema-and-migrations.md): the schema builder, the runner, and the CLI.
+7. [Architecture](docs/architecture.md): the design decisions and the driver seam, for contributors.
+
+Runnable versions of every example live in [examples/](examples/). Build once with `npm run build`, then run any file, for example `node examples/basic-crud.mjs`.
 
 ## The CLI
 
@@ -55,20 +67,6 @@ npx ts-orm migrate:rollback
 ```
 
 [Schema and migrations](docs/schema-and-migrations.md) covers the runner and the schema builder in full.
-
-## Documentation
-
-Read these in order the first time:
-
-1. [Getting started](docs/getting-started.md): install, configure, your first model, your first query.
-2. [Queries](docs/queries.md): the query builder, from one condition to grouped logic and pagination.
-3. [Models](docs/models.md): instances, dirty tracking, hooks, timestamps, casts, and soft deletes.
-4. [Relations](docs/relations.md): hasMany, belongsTo, many-to-many, polymorphic, and eager loading.
-5. [Transactions](docs/transactions.md): the callback form, manual handles, and how hooks defer to commit.
-6. [Schema and migrations](docs/schema-and-migrations.md): the schema builder, the runner, and the CLI.
-7. [Architecture](docs/architecture.md): the design decisions and the driver seam, for contributors.
-
-Runnable versions of every example live in [examples/](examples/). Build once with `npm run build`, then run any file, for example `node examples/basic-crud.mjs`.
 
 ## Requirements
 
