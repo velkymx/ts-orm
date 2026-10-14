@@ -8,29 +8,27 @@ npm i @velkymx/ts-orm
 
 ## A first taste
 
-This runs as written on Node 24 or later, using the built-in SQLite driver and an in-memory database.
+Find a user by id. The driver comes from the environment, so the model takes only the struct and the database is named nowhere.
 
 ```ts
-import { defineStruct, createSqliteDriver, create, read } from '@velkymx/ts-orm';
-
-const driver = createSqliteDriver({ filename: ':memory:' });
+import { defineStruct, defineModel } from '@velkymx/ts-orm';
 
 const User = defineStruct('users', {
   id: { type: 'number', required: true, default: 'auto_increment' },
   name: { type: 'string', required: true, length: 50 },
 });
 
-await driver.execute('CREATE TABLE "users" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT)', []);
+const Users = defineModel(User);
 
-await create(driver, User, { name: 'Ada' });
-
-const users = await read(driver, User);
-console.log(users.data); // [{ id: 1, name: 'Ada' }]
-
-await driver.close();
+const user = await Users.find(1); // throws on driver failure, null on miss
+if (user === null) {
+  console.log('No such user');
+} else {
+  console.log(user.toRow().name); // string, inferred from the struct
+}
 ```
 
-The struct is the only schema you write. The row type, the insert type, and the update type are inferred from it, so your editor knows `name` is a string and `id` is a number without a second declaration.
+Hand a driver explicitly only to join a transaction (`Users.find(1, tx)`), or the read silently runs outside it.
 
 ## What you get
 

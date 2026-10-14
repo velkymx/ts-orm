@@ -126,12 +126,12 @@ Column names are checked against the struct at compile time, every value is boun
 
 ## Move up to models
 
-A model binds one driver and one struct into a class you can extend with your own methods. Instances track which fields changed, so `save()` writes only those columns:
+A model binds the shared environment driver and one struct into a class you can extend with your own methods. Instances track which fields changed, so `save()` writes only those columns:
 
 ```ts
 import { defineModel } from '@velkymx/ts-orm';
 
-class AppUser extends defineModel(driver, User) {
+class AppUser extends defineModel(User) {
   greeting() {
     return `Hello, ${this.toRow().name}`;
   }
