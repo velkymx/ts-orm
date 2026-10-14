@@ -8,7 +8,7 @@ npm i @velkymx/ts-orm
 
 ## A first taste
 
-Declare a table, then read a record. Connection settings come from the environment, so there is no setup code.
+Find a user by id. The driver comes from the environment, so there is no setup code.
 
 ```ts
 import { defineStruct, createDefaultDriver, readOne } from '@velkymx/ts-orm';
@@ -18,17 +18,19 @@ const User = defineStruct('users', {
   name: { type: 'string', required: true, length: 50 },
 });
 
-const user = await readOne(createDefaultDriver(), User, { id: 1 });
+const result = await readOne(createDefaultDriver(), User, { id: 1 });
+
+if (!result.success) {
+  throw new Error(result.errors.join(', '));
+}
+if (result.data === null) {
+  console.log('No such user');
+} else {
+  console.log(result.data.name); // string, inferred from the struct
+}
 ```
 
-Every operation returns the same envelope, discriminated on `success`:
-
-```ts
-console.log(user);
-// { success: true, message: 'Record found', data: { id: 1, name: 'Ada' } }
-```
-
-Check `success`, then read `data` (the row, typed from the struct) or `errors`. The struct is the only schema you write; the row type is inferred from it, so `user.data.name` is known to be a string.
+Every operation returns the same envelope, so you narrow on `success` before touching `data`. A missing row is not an error: it comes back as `success` with `data: null`.
 
 ## What you get
 
