@@ -42,10 +42,10 @@ One logical change per commit, every commit keeps tests green. Format follows th
 ## Development Workflow
 
 1. Fork the repo and clone your fork.
-2. Create a new branch from `main`.
+2. Create a new branch from `develop`.
 3. Commit your changes with clear messages.
 4. Push your branch to your fork.
-5. Submit a pull request to the `main` branch of this repo.
+5. Submit a pull request against the `develop` branch of this repo (never `main`).
 6. Reference the relevant issue number in the pull request description.
 
 ---
