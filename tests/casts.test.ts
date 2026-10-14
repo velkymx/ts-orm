@@ -73,6 +73,12 @@ describe('cast pipeline (issue 81)', () => {
     expect(valuesEqual(1, 2)).toBe(false);
     expect(valuesEqual(null, 0)).toBe(false);
   });
+
+  it('ignores JSON key order but respects array order', () => {
+    expect(valuesEqual({ a: 1, b: 2 }, '{"b":2,"a":1}')).toBe(true);
+    expect(valuesEqual({ o: { x: 1, y: [1, 2] } }, '{"o":{"y":[1,2],"x":1}}')).toBe(true);
+    expect(valuesEqual([1, 2], [2, 1])).toBe(false);
+  });
 });
 
 describe('model casts (issue 81)', () => {
