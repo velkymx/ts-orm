@@ -122,6 +122,14 @@ always refreshes `updated_at` when it exists. Presence gates each
 column, `static timestamps = false` opts out, and no-op saves stay
 silent.
 
+Casts translate between storage shapes and app shapes at the model
+layer only; raw builder rows stay untouched. `static casts` maps
+columns to `boolean`, `integer`, `datetime`, or `json`. `castIn`
+serializes before validation and SQL, `castOut` normalizes on hydrate,
+and dirty tracking compares normalized values so `1` equals `true`
+and `'{"a":1}'` equals `{a:1}`. Null stays null both ways, corrupt
+values throw `CastError` naming the column.
+
 No savepoint nesting: each `transaction` call checks out an
 independent connection and commits independently. Concurrent nesting on
 single-connection drivers fails at the engine; pool drivers commit the

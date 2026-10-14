@@ -18,6 +18,7 @@ import {
 } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
 import { deliver, runHooks, timestampHooks, type HookContext, type ModelHooks } from './lifecycle.js';
+import { castIn, castOut, valuesEqual, type Casts } from './casts.js';
 import { QueryBuilder, query } from './query.js';
 import type { Fields, InsertOf, RowOf, Struct } from './struct.js';
 
@@ -58,6 +59,8 @@ export interface ModelStatic<Table extends string, F extends Fields> {
   readonly hooks?: ModelHooks<F>;
   /** Automatic created_at and updated_at handling. Set false to opt out. */
   readonly timestamps?: boolean;
+  /** App-shape casts by column. Unlisted columns pass through untouched. */
+  readonly casts?: Casts;
   /** Delete rows matching equality conditions in one statement. */
   deleteWhere(conditions: Partial<RowOf<F>>, driver?: Driver): Promise<{ affectedRows: number }>;
   /** Fluent builder over this model table, rows come back unhydrated. */
@@ -90,6 +93,10 @@ export function defineModel<Table extends string, F extends Fields>(
     return flag ? timestampHooks(struct) : undefined;
   }
 
+  function castsOf(ctor: unknown): Casts {
+    return (ctor as { casts?: Casts }).casts ?? {};
+  }
+
   /** Live-attribute context for before-hooks, so stamps and custom defaults flow downstream. */
   function live(attributes: Row, changes: Partial<Row>): HookContext<F> {
     return { attributes, changes };
@@ -104,6 +111,7 @@ export function defineModel<Table extends string, F extends Fields>(
     static readonly boundStruct: Struct<Table, F> = struct;
     static hooks: ModelHooks<F> | undefined = undefined;
     static timestamps: boolean = true;
+    static casts: Casts = {};
 
     protected attributes: Row;
     protected original: Row;
@@ -115,8 +123,9 @@ export function defineModel<Table extends string, F extends Fields>(
 
     static hydrate<T extends Model>(this: new (data?: Partial<Row>) => T, row: Row): T {
       const instance = new this();
-      instance.attributes = { ...row };
-      instance.original = { ...row };
+      const casted = castOut({ ...(row as Record<string, unknown>) }, castsOf(this)) as Row;
+      instance.attributes = { ...casted };
+      instance.original = { ...casted };
       return instance;
     }
 
@@ -159,18 +168,21 @@ export function defineModel<Table extends string, F extends Fields>(
       const target = pick(drv);
       const hooks = hooksOf(this);
       const stamps = stampsOf(this);
+      const casts = castsOf(this);
       const attrs = { ...(payload as Partial<Row>) };
       await runHooks(hooks, 'saving', context(attrs as Row, attrs as Partial<Row>));
       await runHooks(hooks, 'creating', context(attrs as Row, attrs as Partial<Row>));
       await runHooks(stamps, 'creating', live(attrs as Row, attrs as Partial<Row>));
-      const result = await createRow(target, struct, attrs as InsertOf<F>);
+      const stored = castIn(attrs as Record<string, unknown>, casts) as Partial<Row>;
+      const result = await createRow(target, struct, stored as InsertOf<F>);
       if (!result.success) {
         throw new Error(failMessage(result.message, result.errors));
       }
-      const row = { ...attrs };
+      const rowStored = { ...stored };
       if (result.data.id !== undefined) {
-        (row as Record<string, unknown>)[pk] = result.data.id;
+        (rowStored as Record<string, unknown>)[pk] = result.data.id;
       }
+      const row = castOut(rowStored as Record<string, unknown>, casts) as Row;
       const instance = this.hydrate(row as Row);
       await deliver(target, hooks, ['created', 'saved'], context(row as Row, attrs as Partial<Row>));
       return instance;
@@ -185,8 +197,9 @@ export function defineModel<Table extends string, F extends Fields>(
       drv?: Driver,
     ): Promise<{ affectedRows: number }> {
       let builder = query(pick(drv), struct);
-      for (const name of Object.keys(conditions)) {
-        builder = builder.where(name as keyof F & string, (conditions as Record<string, unknown>)[name] as BindValue);
+      const stored = castIn({ ...(conditions as Record<string, unknown>) }, castsOf(this));
+      for (const name of Object.keys(stored)) {
+        builder = builder.where(name as keyof F & string, (stored as Record<string, unknown>)[name] as BindValue);
       }
       const result = await builder.delete();
       if (!result.success) {
@@ -213,7 +226,7 @@ export function defineModel<Table extends string, F extends Fields>(
       for (const name of names) {
         const current = (this.attributes as Record<string, unknown>)[name] as unknown;
         const base = (this.original as Record<string, unknown>)[name] as unknown;
-        if (!Object.is(current, base)) {
+        if (!valuesEqual(current, base)) {
           out.push(name as keyof Row);
         }
       }
@@ -237,18 +250,21 @@ export function defineModel<Table extends string, F extends Fields>(
       const target = pick(drv);
       const hooks = hooksOf(this.constructor);
       const stamps = stampsOf(this.constructor);
+      const casts = castsOf(this.constructor);
       const id = (this.attributes as Record<string, unknown>)[pk] as BindValue | undefined;
       if (id === undefined || id === null) {
         await runHooks(hooks, 'saving', live(this.attributes, this.attributes));
         await runHooks(hooks, 'creating', live(this.attributes, this.attributes));
         await runHooks(stamps, 'creating', live(this.attributes, this.attributes));
-        const result = await createRow(target, struct, this.attributes as InsertOf<F>);
+        const stored = castIn({ ...(this.attributes as Record<string, unknown>) }, casts);
+        const result = await createRow(target, struct, stored as InsertOf<F>);
         if (!result.success) {
           throw new Error(failMessage(result.message, result.errors));
         }
         if (result.data.id !== undefined) {
-          (this.attributes as Record<string, unknown>)[pk] = result.data.id;
+          (stored as Record<string, unknown>)[pk] = result.data.id;
         }
+        this.attributes = castOut(stored, casts) as Row;
         this.original = { ...this.attributes };
         await deliver(target, hooks, ['created', 'saved'], context(this.attributes, this.attributes));
         return this;
@@ -261,8 +277,9 @@ export function defineModel<Table extends string, F extends Fields>(
       await runHooks(hooks, 'updating', live(this.attributes, pending));
       await runHooks(stamps, 'updating', live(this.attributes, pending));
       const changes = this.getChanges();
+      const storedChanges = castIn({ ...(changes as Record<string, unknown>) }, casts);
       const { sql, params } = buildUpdate(target.dialect, struct, {
-        ...(changes as Record<string, unknown>),
+        ...(storedChanges as Record<string, unknown>),
         [pk]: id,
       }, pk);
       await target.execute(sql, params);
