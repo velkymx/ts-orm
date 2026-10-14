@@ -1,7 +1,7 @@
 /**
  * Command line entry logic, kept free of process and filesystem globals so the
  * orchestration is unit testable the way the mapping layer is. The real binary
- * (`bin/cli.ts`) supplies live dependencies; tests supply recording stubs.
+ * (`src/bin/cli.ts`) supplies live dependencies; tests supply recording stubs.
  *
  * Only command: `struct <table>`, which introspects a live table through the
  * shared driver and writes the mapped fields to `./<table>.json`. Failures
@@ -40,9 +40,11 @@ function reason(error: unknown, table: string): string {
  * a non-zero code.
  */
 export async function runCli(argv: readonly string[], deps: CliDeps): Promise<number> {
-  const [command, tableName] = argv;
+  const [command, tableName, ...rest] = argv;
 
-  if (command !== 'struct' || !tableName) {
+  // Reject unknown commands, a missing table, and surplus arguments so a
+  // typo never silently introspects the wrong table or ignores extra input.
+  if (command !== 'struct' || !tableName || rest.length > 0) {
     deps.log(USAGE);
     return 1;
   }

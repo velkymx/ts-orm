@@ -70,6 +70,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
+    "postbuild": "chmod +x dist/bin/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint src tests",

@@ -92,6 +92,21 @@ describe('runCli struct (issue 43)', () => {
     expect(closed.value).toBe(true);
   });
 
+  it('closes the pool and exits non-zero when the write fails', async () => {
+    const closed = { value: false };
+    const driver = stubDriver(COLUMNS, { closed });
+    const rec = recordingDeps(driver);
+    rec.deps.writeFile = () => {
+      throw new Error('disk full');
+    };
+
+    const code = await runCli(['struct', 'users'], rec.deps);
+
+    expect(code).toBe(1);
+    expect(rec.err.join('\n')).toContain('users');
+    expect(closed.value).toBe(true);
+  });
+
   it('closes the pool and exits non-zero on a hostile table name', async () => {
     const closed = { value: false };
     const driver = stubDriver(COLUMNS, { closed });
@@ -124,6 +139,18 @@ describe('runCli usage (issue 43)', () => {
     const rec = recordingDeps(driver);
 
     const code = await runCli(['struct'], rec.deps);
+
+    expect(code).toBe(1);
+    expect(rec.out.concat(rec.err).join('\n')).toContain('Usage: ts-orm struct <tableName>');
+    expect(rec.created).toBe(0);
+  });
+
+  it('prints usage and creates no driver when given surplus arguments', async () => {
+    const closed = { value: false };
+    const driver = stubDriver(COLUMNS, { closed });
+    const rec = recordingDeps(driver);
+
+    const code = await runCli(['struct', 'users', 'extra'], rec.deps);
 
     expect(code).toBe(1);
     expect(rec.out.concat(rec.err).join('\n')).toContain('Usage: ts-orm struct <tableName>');

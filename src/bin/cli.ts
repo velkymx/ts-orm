@@ -9,11 +9,11 @@ import fs from 'node:fs';
 import { runCli } from '../cli.js';
 import { createMysqlDriver } from '../drivers/mysql.js';
 
-const code = await runCli(process.argv.slice(2), {
+// Set exitCode rather than calling process.exit: the pool is already closed,
+// so the process drains naturally without truncating piped stdout.
+process.exitCode = await runCli(process.argv.slice(2), {
   createDriver: createMysqlDriver,
   writeFile: (path, data) => fs.writeFileSync(path, data),
   log: (message) => console.log(message),
   errorLog: (message) => console.error(message),
 });
-
-process.exit(code);
