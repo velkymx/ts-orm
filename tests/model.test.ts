@@ -92,6 +92,17 @@ describe('defineModel (issue 23)', () => {
     await driver.close();
   });
 
+  it('save update validates dirty fields instead of reaching SQL', async () => {
+    const driver = await setup();
+    class User extends defineModel(driver, UserStruct) {}
+    await User.create({ name: 'bob' });
+    const u = (await User.find(1))!;
+    u.fill({ name: 'x'.repeat(51) });
+    await expect(u.save()).rejects.toThrow(/Validation failed/);
+    expect((await User.find(1))?.toRow().name).toBe('bob');
+    await driver.close();
+  });
+
   it('save on a new instance inserts and assigns the id', async () => {
     const driver = await setup();
     class User extends defineModel(driver, UserStruct) {}
