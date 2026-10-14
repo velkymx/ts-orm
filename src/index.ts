@@ -76,6 +76,10 @@ export type { CastType, Casts } from './casts.js';
 export { CastError, castIn, castOut, valuesEqual } from './casts.js';
 export type { ShowColumnRow, IntrospectedField } from './introspect.js';
 export { mapColumnToField, generateStructFromTable } from './introspect.js';
+export type { NamedFieldDef, SimpleConditions, SimplePayload, SimpleRow, SimpleValue } from './simple.js';
+export { create as simpleCreate, read as simpleRead, readOne as simpleReadOne } from './simple.js';
+export { findOrFail as simpleFindOrFail, readWith as simpleReadWith } from './simple.js';
+export { update as simpleUpdate, remove as simpleRemove } from './simple.js';
 export type { CliDeps } from './cli.js';
 export { runCli } from './cli.js';
 

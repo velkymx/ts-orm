@@ -7,7 +7,9 @@
   redeclared, so types and runtime cannot drift.
 - Dual layer. The fluent builder and models cover everyday work with
   full type inference; `driver.query` and `driver.execute` stay open as
-  a raw SQL escape hatch with caller-chosen return generics.
+  a raw SQL escape hatch with caller-chosen return generics. The simple
+  facade (`simpleCreate`, `simpleRead`, ...) mirrors the v1 API for
+  load-and-go calls over the default pool with no setup.
 - Validation before I/O. Payloads validate against the struct first, so
   bad writes never reach the database.
 - Results, not throws, for operations. CRUD returns a `Result` envelope
