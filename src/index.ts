@@ -78,6 +78,19 @@ export type { ShowColumnRow, IntrospectedField } from './introspect.js';
 export { mapColumnToField, generateStructFromTable } from './introspect.js';
 export type { CliDeps } from './cli.js';
 export { runCli } from './cli.js';
+export type { ColumnDef, ReferenceDef } from './schema.js';
+export {
+  structColumns,
+  indexName,
+  buildCreateTable,
+  buildAddColumn,
+  buildDropColumn,
+  buildCreateIndex,
+  buildDropIndex,
+  buildAddForeignKey,
+} from './schema.js';
+export type { Migration, MigrateResult, RollbackResult } from './migrate.js';
+export { MIGRATIONS_TABLE, migrate, rollback } from './migrate.js';
 
 export type {
   RelationKind,

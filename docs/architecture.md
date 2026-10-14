@@ -66,7 +66,24 @@ never written, database defaults are omitted so the engine applies
 them). `RowOf`, `InsertOf`, and `UpdateOf` project the metadata into
 read, write, and partial-update shapes. Introspection
 (`generateStructFromTable`) reads the same shape back out of a live
-database for scaffolding.
+database for scaffolding, and `structColumns` folds it forward into
+schema-builder column definitions.
+
+## Schema and migrations
+
+The schema builder compiles DDL per dialect from one column
+description: `buildCreateTable` (always IF NOT EXISTS), `buildAddColumn`
+and `buildDropColumn`, `buildCreateIndex` and `buildDropIndex`, plus
+`buildAddForeignKey` on engines that allow post-creation constraints
+(SQLite throws; define references inline instead). Auto-increment
+primary keys use each engine's native identity. Migrations are plain
+`{ name, up, down }` objects run oldest first by `migrate`, which
+records each success in `tsorm_migrations` so reruns apply nothing;
+`rollback` reverses the latest batch newest first and throws on
+unregistered names instead of guessing. DDL is not transactional on
+every engine, so tracking writes follow the migration and a retry
+replays exactly the remainder. The CLI exposes `make:migration`,
+`migrate`, and `migrate:rollback` over the same runner.
 
 ## Driver architecture
 

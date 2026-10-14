@@ -132,7 +132,7 @@ describe('runCli usage (issue 43)', () => {
     const code = await runCli([], rec.deps);
 
     expect(code).toBe(1);
-    expect(rec.out.concat(rec.err).join('\n')).toContain('Usage: ts-orm struct <tableName>');
+    expect(rec.out.concat(rec.err).join('\n')).toContain('make:migration');
     expect(rec.created).toBe(0);
   });
 
@@ -144,7 +144,7 @@ describe('runCli usage (issue 43)', () => {
     const code = await runCli(['struct'], rec.deps);
 
     expect(code).toBe(1);
-    expect(rec.out.concat(rec.err).join('\n')).toContain('Usage: ts-orm struct <tableName>');
+    expect(rec.out.concat(rec.err).join('\n')).toContain('make:migration');
     expect(rec.created).toBe(0);
   });
 
@@ -156,7 +156,7 @@ describe('runCli usage (issue 43)', () => {
     const code = await runCli(['struct', 'users', 'extra'], rec.deps);
 
     expect(code).toBe(1);
-    expect(rec.out.concat(rec.err).join('\n')).toContain('Usage: ts-orm struct <tableName>');
+    expect(rec.out.concat(rec.err).join('\n')).toContain('make:migration');
     expect(rec.created).toBe(0);
   });
 });

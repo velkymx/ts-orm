@@ -50,6 +50,21 @@ mapped fields to `./users.json`. Fold that output into `defineStruct` to
 declare the model. On an invalid table name or a connection failure it prints
 a message and exits non-zero.
 
+Migrations version the schema from code:
+
+```bash
+npx ts-orm make:migration add_posts
+npx ts-orm migrate
+npx ts-orm migrate:rollback
+```
+
+`make:migration` scaffolds a timestamped `up`/`down` file in
+`./migrations`. `migrate` applies pending files oldest first and records
+them in `tsorm_migrations`, so reruns apply nothing. `migrate:rollback`
+reverses the latest batch. Build the statements with the schema builder
+(`buildCreateTable`, `buildAddColumn`, `buildCreateIndex`, ...) or fold a
+struct with `structColumns`; see `examples/migrations.mjs`.
+
 ## Docs
 
 - [Getting started](docs/getting-started.md): installation, configuration, first model, first query
