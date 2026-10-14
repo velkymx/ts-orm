@@ -157,6 +157,8 @@ export class QueryBuilder<Table extends string, F extends Fields> {
   private orderDir: 'asc' | 'desc' = 'asc';
   private limitVal: number | undefined = undefined;
   private offsetVal: number | undefined = undefined;
+  private softColumn: string | null = null;
+  private includeTrashed = false;
 
   constructor(driver: Driver, struct: Struct<Table, F>) {
     this.driver = driver;
@@ -176,6 +178,8 @@ export class QueryBuilder<Table extends string, F extends Fields> {
     copy.orderDir = this.orderDir;
     copy.limitVal = this.limitVal;
     copy.offsetVal = this.offsetVal;
+    copy.softColumn = this.softColumn;
+    copy.includeTrashed = this.includeTrashed;
     return copy;
   }
 
@@ -301,6 +305,22 @@ export class QueryBuilder<Table extends string, F extends Fields> {
     return this.push({ kind: 'like', boolean: 'OR', column, substring });
   }
 
+  /**
+   * Apply the soft delete scope: rows stamped in the column stay hidden.
+   * Explicit plumbing for models and relation loaders; the raw factory
+   * never scopes, so plain builder use keeps exact SQL semantics.
+   */
+  softScope(column: string): QueryBuilder<Table, F> {
+    this.softColumn = column;
+    return this;
+  }
+
+  /** Lift the soft delete scope, showing trashed rows too. No-op when unscoped. */
+  withTrashed(): QueryBuilder<Table, F> {
+    this.includeTrashed = true;
+    return this;
+  }
+
   /** Restrict the SELECT column list, defaults to all columns. */
   select(...columns: (keyof F & string)[]): QueryBuilder<Table, F> {
     this.selected = [...columns] as string[];
@@ -327,8 +347,16 @@ export class QueryBuilder<Table extends string, F extends Fields> {
   }
 
   private buildWhere(dialect: Dialect, counter: Counter, params: BindValue[]): string {
-    if (this.nodes.length === 0) return '';
-    return ` WHERE ${compileList(this.nodes, dialect, counter, params)}`;
+    const scoped = this.softColumn !== null && !this.includeTrashed;
+    if (this.nodes.length === 0 && !scoped) return '';
+    const soft =
+      scoped === true
+        ? `${safeIdentifier(this.softColumn as string, dialect, 'column name')} IS NULL`
+        : '';
+    if (this.nodes.length === 0) return ` WHERE ${soft}`;
+    const compiled = compileList(this.nodes, dialect, counter, params);
+    // Parenthesize user conditions: a trailing OR must not escape the scope.
+    return scoped === true ? ` WHERE (${compiled}) AND ${soft}` : ` WHERE ${compiled}`;
   }
 
   private buildOrder(dialect: Dialect): string {

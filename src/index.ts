@@ -49,6 +49,7 @@ export {
   buildSelect,
   buildSelectWith,
   buildUpdate,
+  buildSoftUpdate,
   buildDelete,
   primaryKey,
   create,
@@ -66,7 +67,7 @@ export { QueryBuilder, query } from './query.js';
 
 export { TransactionNotSupportedError, TxHandle, beginTransaction, transaction } from './transaction.js';
 
-export type { ModelInstance, ModelStatic } from './model.js';
+export type { ModelInstance, ModelStatic, ScopedReads } from './model.js';
 export { defineModel } from './model.js';
 
 export type { HookName, HookContext, HookFn, ModelHooks } from './lifecycle.js';
@@ -83,8 +84,11 @@ export type {
   MorphMany,
   Relation,
   Loaded,
+  LoadOptions,
+  DeleteRelatedMode,
 } from './relations.js';
 export { hasOne, hasMany, belongsTo, belongsToMany, morphMany, load, loadOne, deleteRelated } from './relations.js';
+export { SOFT_COLUMN, hasSoftColumn, requireSoftColumn, softColumnOf, softStamp, isTrashed } from './soft.js';
 
 export { createMysqlDriver } from './drivers/mysql.js';
 export { mapMysqlError } from './drivers/mysql.js';
