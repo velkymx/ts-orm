@@ -36,18 +36,24 @@
     "uuid": "^11.1.0"
   },
   "peerDependencies": {
-    "mssql": ">=11"
+    "mssql": ">=11",
+    "pg": ">=8"
   },
   "peerDependenciesMeta": {
     "mssql": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/mssql": "^12.3.0",
     "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "eslint": "^9.24.0",
     "mssql": "^12.7.6",
+    "pg": "^8.23.1",
     "prettier": "^3.5.3",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
