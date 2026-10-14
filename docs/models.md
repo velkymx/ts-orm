@@ -40,6 +40,8 @@ const everyone = await AppUser.all();
 
 Each of these takes an optional driver as its last argument, which is how a model write joins a transaction. See [Transactions](transactions.md).
 
+A primary key you supply is authoritative: `create` only fills the key from the database when you omit it. Models without an `auto_increment` column therefore use natural keys with no extra declaration.
+
 ## Dirty tracking and save
 
 An instance remembers the values it was hydrated with. `fill` merges new values, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns:
