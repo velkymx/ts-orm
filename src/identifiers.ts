@@ -5,9 +5,11 @@
  * builders accept nothing a raw user string could reach.
  */
 
+import type { Dialect } from './dialect.js';
+
 declare const safeIdentifierBrand: unique symbol;
 
-/** A validated, backtick-quoted identifier. Only this module can mint one. */
+/** A validated, dialect-quoted identifier. Only this module can mint one. */
 export type SafeIdentifier = string & { readonly [safeIdentifierBrand]: true };
 
 const IDENTIFIER_PATTERN = /^[a-zA-Z0-9_]+$/;
@@ -24,25 +26,33 @@ export function isQualifiedIdentifier(value: unknown): value is string {
 }
 
 /**
- * Validate a bare identifier and return it backtick-quoted and branded.
- * The allowlist guarantees no backtick is present, so quoting cannot be broken.
+ * Validate a bare identifier and return it quoted for the dialect and branded.
+ * The allowlist guarantees no quote character is present, so quoting is safe.
  */
-export function safeIdentifier(value: string, context = 'identifier'): SafeIdentifier {
+export function safeIdentifier(
+  value: string,
+  dialect: Dialect,
+  context = 'identifier',
+): SafeIdentifier {
   if (!isIdentifier(value)) {
     throw new Error(
       `Invalid ${context}: identifiers may contain only letters, digits, and underscore`,
     );
   }
-  return `\`${value}\`` as SafeIdentifier;
+  return dialect.quoteIdent(value) as SafeIdentifier;
 }
 
 /** Validate a `table.column` identifier and return both halves quoted and branded. */
-export function safeQualified(value: string, context = 'identifier'): SafeIdentifier {
+export function safeQualified(
+  value: string,
+  dialect: Dialect,
+  context = 'identifier',
+): SafeIdentifier {
   if (!isQualifiedIdentifier(value)) {
     throw new Error(`Invalid qualified ${context}: expected table.column`);
   }
   const dot = value.indexOf('.');
   const table = value.slice(0, dot);
   const column = value.slice(dot + 1);
-  return `\`${table}\`.\`${column}\`` as SafeIdentifier;
+  return `${dialect.quoteIdent(table)}.${dialect.quoteIdent(column)}` as SafeIdentifier;
 }

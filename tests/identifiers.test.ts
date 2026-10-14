@@ -6,6 +6,7 @@ import {
   safeQualified,
   type SafeIdentifier,
 } from '../src/identifiers.js';
+import { mysql, postgres } from '../src/dialect.js';
 
 describe('identifier predicates', () => {
   it('accepts alphanumeric and underscore', () => {
@@ -30,36 +31,38 @@ describe('identifier predicates', () => {
 });
 
 describe('safeIdentifier', () => {
-  it('wraps a valid identifier in backticks', () => {
-    expect(safeIdentifier('users')).toBe('`users`');
+  it('quotes a valid identifier for the dialect', () => {
+    expect(safeIdentifier('users', mysql)).toBe('`users`');
+    expect(safeIdentifier('users', postgres)).toBe('"users"');
   });
 
   it('throws on an injection attempt', () => {
-    expect(() => safeIdentifier('users; DROP TABLE users--', 'table name')).toThrow(
+    expect(() => safeIdentifier('users; DROP TABLE users--', mysql, 'table name')).toThrow(
       /table name/,
     );
   });
 
   it('throws on empty or non-string input', () => {
-    expect(() => safeIdentifier('')).toThrow();
-    expect(() => safeIdentifier(undefined as unknown as string)).toThrow();
+    expect(() => safeIdentifier('', mysql)).toThrow();
+    expect(() => safeIdentifier(undefined as unknown as string, mysql)).toThrow();
   });
 });
 
 describe('safeQualified', () => {
-  it('escapes each half of a qualified identifier', () => {
-    expect(safeQualified('users.id')).toBe('`users`.`id`');
+  it('quotes each half of a qualified identifier for the dialect', () => {
+    expect(safeQualified('users.id', mysql)).toBe('`users`.`id`');
+    expect(safeQualified('users.id', postgres)).toBe('"users"."id"');
   });
 
   it('throws on a malformed qualified identifier', () => {
-    expect(() => safeQualified('users')).toThrow();
-    expect(() => safeQualified('users.id; DROP')).toThrow();
+    expect(() => safeQualified('users', mysql)).toThrow();
+    expect(() => safeQualified('users.id; DROP', mysql)).toThrow();
   });
 });
 
 describe('type-level branding', () => {
   it('a SafeIdentifier is usable as a string', () => {
-    const id: SafeIdentifier = safeIdentifier('users');
+    const id: SafeIdentifier = safeIdentifier('users', mysql);
     const asString: string = id;
     expect(asString).toBe('`users`');
   });
