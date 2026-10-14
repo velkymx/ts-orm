@@ -23,7 +23,7 @@ export type { OrmErrorCode, Logger } from './errors.js';
 export { OrmError, setLogger, resetLogger, sanitizeError } from './errors.js';
 
 export type { SafeIdentifier } from './identifiers.js';
-export { isIdentifier, isQualifiedIdentifier, safeIdentifier, safeQualified } from './identifiers.js';
+export { isIdentifier, isQualifiedIdentifier, safeIdentifier, safeQualified, escapeLike } from './identifiers.js';
 
 export type { DialectName, InsertIdStrategy, Dialect } from './dialect.js';
 export { mysql, postgres, sqlite, mssql } from './dialect.js';
@@ -50,6 +50,7 @@ export {
   buildSelectWith,
   buildUpdate,
   buildDelete,
+  primaryKey,
   create,
   read,
   readOne,
@@ -64,6 +65,9 @@ export type { ComparisonOperator, BooleanOp, GroupFn } from './query.js';
 export { QueryBuilder, query } from './query.js';
 
 export { TransactionNotSupportedError, TxHandle, beginTransaction, transaction } from './transaction.js';
+
+export type { ModelInstance, ModelStatic } from './model.js';
+export { defineModel } from './model.js';
 
 export { createMysqlDriver } from './drivers/mysql.js';
 export { mapMysqlError } from './drivers/mysql.js';

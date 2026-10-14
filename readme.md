@@ -39,6 +39,13 @@ Database errors are sanitized to prevent schema information leakage:
 - Full errors logged server-side for debugging
 - Generic messages returned to clients
 
+### Security Model (v2+)
+What the library guarantees and what stays with the app:
+- Guaranteed: identifiers pass an allowlist and are quoted per dialect; every value is bound, never interpolated; driver errors map to safe messages via `sanitizeError`; payloads validate against structs before writes.
+- Search input: use `whereLike` (or `escapeLike`) so `%` and `_` from users match literally; raw `LIKE` with hand-built `%` patterns is intentionally available for deliberate wildcard use.
+- App scope, by design: authentication and authorization, request body limits and timeouts, rate limiting, output encoding for rendered HTML.
+- Data modeling notes: polymorphic columns (`commentable_type` plus `commentable_id`) carry no foreign key, so parent deletes must clean them explicitly until relation-aware deletes land; transactions (`transaction`, `TxHandle`) are the tool for multi-statement atomicity.
+
 ---
 
 ## ⚠️ Breaking Changes in v1.5.0
