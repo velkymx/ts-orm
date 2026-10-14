@@ -16,7 +16,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [24.x, 26.x]
+        # node:sqlite driver requires Node 24 or later, 20 and 22 lack the module
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
@@ -27,4 +28,6 @@ jobs:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
     - run: npm ci
+    - run: npm run typecheck
+    - run: npm run build
     - run: npm test
