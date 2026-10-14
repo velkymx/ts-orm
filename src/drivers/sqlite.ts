@@ -7,10 +7,21 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { sqlite as sqliteDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult } from '../driver.js';
+import { OrmError, type OrmErrorCode } from '../errors.js';
 
 export interface SqliteOptions {
   /** Database file path, or ':memory:' for an ephemeral database. */
   readonly filename?: string;
+}
+
+/** Normalize a node:sqlite error by its constraint message into an OrmError. */
+export function mapSqliteError(error: unknown): OrmError {
+  const message = error instanceof Error ? error.message : String(error);
+  let code: OrmErrorCode = 'unknown';
+  if (message.includes('UNIQUE constraint failed')) code = 'duplicate';
+  else if (message.includes('FOREIGN KEY constraint failed')) code = 'foreign_key';
+  else if (message.includes('NOT NULL constraint failed')) code = 'not_null';
+  return new OrmError(code, error);
 }
 
 export function createSqliteDriver(options: SqliteOptions = {}): Driver {
@@ -28,17 +39,25 @@ export function createSqliteDriver(options: SqliteOptions = {}): Driver {
     dialect: sqliteDialect,
 
     async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
-      const statement = getDb().prepare(text);
-      return statement.all(...(params as SQLInputValue[])) as Row[];
+      try {
+        const statement = getDb().prepare(text);
+        return statement.all(...(params as SQLInputValue[])) as Row[];
+      } catch (error) {
+        throw mapSqliteError(error);
+      }
     },
 
     async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
-      const statement = getDb().prepare(text);
-      const info = statement.run(...(params as SQLInputValue[]));
-      return {
-        insertId: Number(info.lastInsertRowid),
-        affectedRows: Number(info.changes),
-      };
+      try {
+        const statement = getDb().prepare(text);
+        const info = statement.run(...(params as SQLInputValue[]));
+        return {
+          insertId: Number(info.lastInsertRowid),
+          affectedRows: Number(info.changes),
+        };
+      } catch (error) {
+        throw mapSqliteError(error);
+      }
     },
 
     async close(): Promise<void> {

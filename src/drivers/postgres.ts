@@ -8,6 +8,19 @@ import * as pg from 'pg';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { postgres as postgresDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult } from '../driver.js';
+import { OrmError, type OrmErrorCode } from '../errors.js';
+
+const CODES: Record<string, OrmErrorCode> = {
+  '23505': 'duplicate',
+  '23503': 'foreign_key',
+  '23502': 'not_null',
+};
+
+/** Normalize a pg error (SQLSTATE in `code`) into an OrmError. */
+export function mapPostgresError(error: unknown): OrmError {
+  const code = (error as { code?: string }).code;
+  return new OrmError((code ? CODES[code] : undefined) ?? 'unknown', error);
+}
 
 let pool: pg.Pool | null = null;
 let overrides: Partial<DbConfig> | null = null;
@@ -40,16 +53,24 @@ export function createPostgresDriver(): Driver {
     dialect: postgresDialect,
 
     async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
-      const result = await getPool().query(text, params as unknown[]);
-      return result.rows as Row[];
+      try {
+        const result = await getPool().query(text, params as unknown[]);
+        return result.rows as Row[];
+      } catch (error) {
+        throw mapPostgresError(error);
+      }
     },
 
     async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
-      const result = await getPool().query(text, params as unknown[]);
-      const affectedRows = result.rowCount ?? 0;
-      const firstRow: Record<string, unknown> | undefined = result.rows[0];
-      const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
-      return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+      try {
+        const result = await getPool().query(text, params as unknown[]);
+        const affectedRows = result.rowCount ?? 0;
+        const firstRow: Record<string, unknown> | undefined = result.rows[0];
+        const insertId = firstRow ? (Object.values(firstRow)[0] as number | string) : undefined;
+        return insertId === undefined ? { affectedRows } : { insertId, affectedRows };
+      } catch (error) {
+        throw mapPostgresError(error);
+      }
     },
 
     async close(): Promise<void> {

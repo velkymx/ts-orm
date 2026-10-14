@@ -10,11 +10,24 @@ import type { BindValue, Driver } from './driver.js';
 import type { Fields, InsertOf, RowOf, Struct, UpdateOf } from './struct.js';
 import { validatePayload } from './validation.js';
 import { ok, fail, type Result } from './result.js';
+import { sanitizeError } from './errors.js';
 
 /** A rendered statement: parameterized SQL plus its positional bind values. */
 export interface BuiltStatement {
   readonly sql: string;
   readonly params: readonly BindValue[];
+}
+
+/** Single error route: run an operation, converting any throw to a safe failure. */
+async function guarded<T>(
+  operation: string,
+  fn: () => Promise<Result<T>>,
+): Promise<Result<T>> {
+  try {
+    return await fn();
+  } catch (error) {
+    return fail(sanitizeError(error, operation));
+  }
 }
 
 /** The primary key column: the auto_increment field, else the first field, else id. */
@@ -116,13 +129,11 @@ export async function read<Table extends string, F extends Fields>(
   conditions: Partial<RowOf<F>> = {},
   options: ReadOptions = {},
 ): Promise<Result<RowOf<F>[]>> {
-  try {
+  return guarded('read', async () => {
     const { sql, params } = buildSelect(driver.dialect, struct, conditions, options);
     const rows = await driver.query<RowOf<F>>(sql, params);
     return ok(rows, 'Data retrieved');
-  } catch (error) {
-    return fail('Database operation failed', [(error as Error).message]);
-  }
+  });
 }
 
 /** Thrown by findOrFail when no row matches. */
@@ -171,13 +182,11 @@ export async function create<Table extends string, F extends Fields>(
     return fail('Validation failed', errors.map((e) => e.message));
   }
 
-  try {
+  return guarded('create', async () => {
     const { sql, params } = buildInsert(driver.dialect, struct, data);
     const result = await driver.execute(sql, params);
     return ok({ id: result.insertId }, 'Record created');
-  } catch (error) {
-    return fail('Database operation failed', [(error as Error).message]);
-  }
+  });
 }
 
 /** Column names (excluding the id) that carry a value to write. */
@@ -239,13 +248,11 @@ export async function update<Table extends string, F extends Fields>(
     return fail('No fields to update');
   }
 
-  try {
+  return guarded('update', async () => {
     const { sql, params } = buildUpdate(driver.dialect, struct, data, idKey);
     const result = await driver.execute(sql, params);
     return ok({ affectedRows: result.affectedRows }, 'Record updated');
-  } catch (error) {
-    return fail('Database operation failed', [(error as Error).message]);
-  }
+  });
 }
 
 /** Delete a record by its id column value. */
@@ -259,11 +266,9 @@ export async function remove<Table extends string, F extends Fields>(
     return fail('id value is required');
   }
 
-  try {
+  return guarded('remove', async () => {
     const sql = buildDelete(driver.dialect, struct, idKey);
     const result = await driver.execute(sql, [idValue]);
     return ok({ affectedRows: result.affectedRows }, 'Record deleted');
-  } catch (error) {
-    return fail('Database operation failed', [(error as Error).message]);
-  }
+  });
 }
