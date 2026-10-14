@@ -8,7 +8,8 @@
  * 'output').
  */
 
-import * as sql from 'mssql';
+import type * as sql from 'mssql';
+import { createRequire } from 'node:module';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { mssql as mssqlDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
@@ -28,6 +29,27 @@ export function mapMssqlError(error: unknown): OrmError {
 }
 
 let pool: sql.ConnectionPool | null = null;
+let sqlLib: typeof sql | null = null;
+
+/**
+ * Load the optional mssql peer on first use. Separated from peer() so tests
+ * can stub the require and prove the missing-peer error is actionable.
+ */
+export function loadMssqlPeer(requirePeer: (id: string) => unknown = createRequire(import.meta.url)): typeof sql {
+  try {
+    return requirePeer('mssql') as typeof sql;
+  } catch {
+    throw new Error("mssql support needs the optional 'mssql' package: npm install mssql");
+  }
+}
+
+/** The loaded peer, cached across pools. */
+function peer(): typeof sql {
+  if (!sqlLib) {
+    sqlLib = loadMssqlPeer();
+  }
+  return sqlLib;
+}
 let overrides: Partial<DbConfig> | null = null;
 
 /** Supply explicit configuration, overriding the environment. Resets the pool. */
@@ -53,7 +75,7 @@ function toMssqlConfig(cfg: DbConfig): sql.config {
 
 async function getPool(): Promise<sql.ConnectionPool> {
   if (!pool) {
-    pool = await new sql.ConnectionPool(toMssqlConfig(resolveConfig(overrides ?? {}))).connect();
+    pool = await new (peer().ConnectionPool)(toMssqlConfig(resolveConfig(overrides ?? {}))).connect();
   }
   return pool;
 }
@@ -112,7 +134,7 @@ export function createMssqlDriver(): Driver {
     },
 
     async beginTransaction(): Promise<TxConnection> {
-      const tx = new sql.Transaction(await getPool());
+      const tx = new (peer().Transaction)(await getPool());
       try {
         await tx.begin();
       } catch (error) {
@@ -123,7 +145,7 @@ export function createMssqlDriver(): Driver {
 
         async query<Row>(text: string, params: readonly BindValue[]): Promise<Row[]> {
           try {
-            const request = new sql.Request(tx);
+            const request = new (peer().Request)(tx);
             bind(request, params);
             const result = await request.query<Row>(text);
             return result.recordset;
@@ -134,7 +156,7 @@ export function createMssqlDriver(): Driver {
 
         async execute(text: string, params: readonly BindValue[]): Promise<ExecuteResult> {
           try {
-            const request = new sql.Request(tx);
+            const request = new (peer().Request)(tx);
             bind(request, params);
             const result = await request.query(text);
             return toExecuteResult(result);

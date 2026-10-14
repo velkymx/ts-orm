@@ -4,7 +4,8 @@
  * from the RETURNING row the query layer appends (insertIdStrategy 'returning').
  */
 
-import * as pg from 'pg';
+import type * as pg from 'pg';
+import { createRequire } from 'node:module';
 import { resolveConfig, type DbConfig } from '../config.js';
 import { postgres as postgresDialect } from '../dialect.js';
 import type { BindValue, Driver, ExecuteResult, TxConnection } from '../driver.js';
@@ -24,6 +25,27 @@ export function mapPostgresError(error: unknown): OrmError {
 
 let pool: pg.Pool | null = null;
 let overrides: Partial<DbConfig> | null = null;
+let pgLib: typeof pg | null = null;
+
+/**
+ * Load the optional pg peer on first use. Separated from peer() so tests
+ * can stub the require and prove the missing-peer error is actionable.
+ */
+export function loadPgPeer(requirePeer: (id: string) => unknown = createRequire(import.meta.url)): typeof pg {
+  try {
+    return requirePeer('pg') as typeof pg;
+  } catch {
+    throw new Error("postgres support needs the optional 'pg' package: npm install pg");
+  }
+}
+
+/** The loaded peer, cached across pools. */
+function peer(): typeof pg {
+  if (!pgLib) {
+    pgLib = loadPgPeer();
+  }
+  return pgLib;
+}
 
 /** Supply explicit configuration, overriding the environment. Resets the pool. */
 export function configurePostgres(config: Partial<DbConfig>): void {
@@ -37,7 +59,7 @@ export function configurePostgres(config: Partial<DbConfig>): void {
 function getPool(): pg.Pool {
   if (!pool) {
     const cfg = resolveConfig(overrides ?? {});
-    pool = new pg.Pool({
+    pool = new (peer().Pool)({
       host: cfg.host,
       user: cfg.user,
       password: cfg.password,

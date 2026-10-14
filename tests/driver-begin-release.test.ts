@@ -1,17 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OrmError } from '../src/errors.js';
 
-const { fakeMysqlConn, fakePgClient, pgPoolConnect } = vi.hoisted(() => ({
-  fakeMysqlConn: {
-    beginTransaction: vi.fn(),
-    release: vi.fn(),
-  },
-  fakePgClient: {
+const { fakeMysqlConn, fakePgClient, fakePgPool } = vi.hoisted(() => {
+  const fakePgClient = {
     query: vi.fn(),
     release: vi.fn(),
-  },
-  pgPoolConnect: vi.fn(),
-}));
+  };
+  return {
+    fakeMysqlConn: {
+      beginTransaction: vi.fn(),
+      release: vi.fn(),
+    },
+    fakePgClient,
+    fakePgPool: {
+      connect: vi.fn(async () => fakePgClient),
+      end: vi.fn(),
+    },
+  };
+});
 
 vi.mock('../src/connection.js', () => ({
   getPool: () => ({
@@ -20,11 +26,16 @@ vi.mock('../src/connection.js', () => ({
   closePool: async () => {},
 }));
 
-vi.mock('pg', () => ({
-  Pool: class {
-    connect = pgPoolConnect;
-  },
-}));
+vi.mock('node:module', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:module')>();
+  return {
+    ...actual,
+    createRequire: () => (id: string) => {
+      if (id === 'pg') return { Pool: class { constructor() { return fakePgPool; } } };
+      throw new Error(`unexpected peer require: ${id}`);
+    },
+  };
+});
 
 import { createMysqlDriver } from '../src/drivers/mysql.js';
 import { createPostgresDriver } from '../src/drivers/postgres.js';
@@ -36,7 +47,6 @@ process.env['DB_DATABASE'] ??= 'test';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  pgPoolConnect.mockResolvedValue(fakePgClient);
 });
 
 describe('failed BEGIN releases the checkout (issue 119)', () => {
