@@ -57,7 +57,12 @@ export function createMysqlDriver(): Driver {
 
     async beginTransaction(): Promise<TxConnection> {
       const conn = await getPool().getConnection();
-      await conn.beginTransaction();
+      try {
+        await conn.beginTransaction();
+      } catch (error) {
+        conn.release();
+        throw mapMysqlError(error);
+      }
       return {
         dialect: mysqlDialect,
 

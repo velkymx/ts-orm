@@ -113,7 +113,11 @@ export function createMssqlDriver(): Driver {
 
     async beginTransaction(): Promise<TxConnection> {
       const tx = new sql.Transaction(await getPool());
-      await tx.begin();
+      try {
+        await tx.begin();
+      } catch (error) {
+        throw mapMssqlError(error);
+      }
       return {
         dialect: mssqlDialect,
 

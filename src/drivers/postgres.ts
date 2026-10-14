@@ -88,7 +88,12 @@ export function createPostgresDriver(): Driver {
 
     async beginTransaction(): Promise<TxConnection> {
       const client = await getPool().connect();
-      await client.query('BEGIN');
+      try {
+        await client.query('BEGIN');
+      } catch (error) {
+        client.release();
+        throw mapPostgresError(error);
+      }
       return {
         dialect: postgresDialect,
 
