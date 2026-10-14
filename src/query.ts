@@ -58,10 +58,16 @@ function toCount(value: unknown): number | undefined {
   return Number.isInteger(n) && n >= 0 ? n : undefined;
 }
 
-/** Normalize operator text to the SQL emitted form. */
+/** Operators allowed to reach SQL. Everything else throws at build time. */
+const SQL_OPERATORS: ReadonlySet<string> = new Set(['=', '!=', '<>', '<', '<=', '>', '>=', 'LIKE']);
+
+/** Normalize operator text to the SQL emitted form, rejecting anything unlisted. */
 function normalizeOperator(op: ComparisonOperator): string {
-  if (op === 'like') return 'LIKE';
-  return op;
+  const normalized = op === 'like' ? 'LIKE' : op;
+  if (!SQL_OPERATORS.has(normalized)) {
+    throw new Error(`Invalid comparison operator: ${String(op)}`);
+  }
+  return normalized;
 }
 
 interface Counter {
