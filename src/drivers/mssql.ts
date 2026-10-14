@@ -140,6 +140,7 @@ export function createMssqlDriver(): Driver {
       } catch (error) {
         throw mapMssqlError(error);
       }
+      let settled = false;
       return {
         dialect: mssqlDialect,
 
@@ -169,16 +170,22 @@ export function createMssqlDriver(): Driver {
 
         async commit(): Promise<void> {
           await tx.commit();
+          settled = true;
         },
 
         async rollback(): Promise<void> {
           await tx.rollback();
+          settled = true;
         },
 
         async release(): Promise<void> {},
 
-        // Matches release: the mssql transaction needs no manual return.
-        async [Symbol.asyncDispose](): Promise<void> {},
+        async [Symbol.asyncDispose](): Promise<void> {
+          if (!settled) {
+            await tx.rollback();
+            settled = true;
+          }
+        },
       };
     },
   };

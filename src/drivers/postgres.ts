@@ -116,6 +116,7 @@ export function createPostgresDriver(): Driver {
         client.release();
         throw mapPostgresError(error);
       }
+      let settled = false;
       return {
         dialect: postgresDialect,
 
@@ -144,10 +145,12 @@ export function createPostgresDriver(): Driver {
 
         async commit(): Promise<void> {
           await client.query('COMMIT');
+          settled = true;
         },
 
         async rollback(): Promise<void> {
           await client.query('ROLLBACK');
+          settled = true;
         },
 
         async release(): Promise<void> {
@@ -155,7 +158,14 @@ export function createPostgresDriver(): Driver {
         },
 
         async [Symbol.asyncDispose](): Promise<void> {
-          client.release();
+          try {
+            if (!settled) {
+              await client.query('ROLLBACK');
+              settled = true;
+            }
+          } finally {
+            client.release();
+          }
         },
       };
     },
