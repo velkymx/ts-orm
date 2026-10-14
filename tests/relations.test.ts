@@ -130,6 +130,16 @@ describe('relations (issue 22)', () => {
     await base.close();
   });
 
+  it('belongsToMany skips pivot links whose target is gone', async () => {
+    const base = await setup();
+    const { driver } = counting(base);
+    await driver.execute('INSERT INTO "author_role" ("author_id", "role_id") VALUES (?, ?)', [1, 999]);
+    const rel = belongsToMany(Author, Role, AuthorRole, 'author_id', 'role_id');
+    const got = await load(driver, rel, [{ id: 1 }]);
+    expect(got.get(1)?.map((r) => r.name)).toEqual(['admin', 'editor']);
+    await base.close();
+  });
+
   it('morphMany scopes by type plus id in one query', async () => {
     const base = await setup();
     const { driver, reads } = counting(base);
