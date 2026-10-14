@@ -146,11 +146,18 @@ Unlike the other runners, `paginate` returns the page directly and throws if the
 
 ## Deleting
 
-`delete` runs a `DELETE` over the current filters and reports how many rows it removed:
+`delete` runs a `DELETE` over the current filters and reports how many rows it removed. It refuses to run with no filter, so a bare `query(driver, User).delete()` fails instead of wiping the table:
 
 ```ts
 const removed = await query(driver, User).where('role', 'banned').delete();
 console.log(removed.data.affectedRows);
+```
+
+Wiping the table takes the explicit hatch, and bulk `deleteWhere({})` on a model refuses the same way:
+
+```ts
+const wiped = await query(driver, User).deleteAll();
+console.log(wiped.data.affectedRows);
 ```
 
 ## Inspecting the SQL

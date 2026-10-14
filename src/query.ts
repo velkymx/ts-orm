@@ -519,6 +519,22 @@ export class QueryBuilder<Table extends string, F extends Fields> {
 
   /** Execute DELETE over the current filters and return the affected rows. */
   async delete(): Promise<Result<{ affectedRows: number }>> {
+    if (this.nodes.length === 0) {
+      return fail('Refusing to delete without a filter: add where() or use deleteAll()');
+    }
+    return this.runDelete();
+  }
+
+  /**
+   * Delete every row the scope admits, with no filter required. This is the
+   * only unfiltered delete path; on soft-scoped builders it deletes live rows.
+   */
+  async deleteAll(): Promise<Result<{ affectedRows: number }>> {
+    return this.runDelete();
+  }
+
+  /** Compile and execute the DELETE this builder describes. */
+  private async runDelete(): Promise<Result<{ affectedRows: number }>> {
     try {
       const { sql, params } = this.toDeleteSQL();
       const result = await this.driver.execute(sql, params);

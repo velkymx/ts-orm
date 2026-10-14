@@ -350,6 +350,9 @@ export function buildSoftUpdate<Table extends string, F extends Fields>(
     });
     filters.push(`${safeIdentifier(inFilter.column, dialect, 'column name')} IN (${marks.join(', ')})`);
   }
+  if (filters.length === 0) {
+    throw new Error('Refusing to soft delete without a filter: pass conditions or an IN list');
+  }
   filters.push(`${safeIdentifier(column, dialect, 'column name')} IS NULL`);
   return { sql: `UPDATE ${table} SET ${set} WHERE ${filters.join(' AND ')}`, params };
 }
