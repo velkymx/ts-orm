@@ -29,6 +29,7 @@ export type { DialectName, InsertIdStrategy, Dialect } from './dialect.js';
 export { mysql, postgres, sqlite, mssql } from './dialect.js';
 
 export type { BindValue, ExecuteResult, Driver, TxConnection } from './driver.js';
+export { createDefaultDriver } from './default-driver.js';
 
 export type { DbConfig } from './config.js';
 export { resolveConfig } from './config.js';
