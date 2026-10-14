@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defineStruct } from '../src/struct.js';
+import { defineModel } from '../src/model.js';
 import {
   hasMany,
   hasOne,
@@ -103,6 +104,27 @@ describe('relations (issue 22)', () => {
     const rel = hasOne(Author, Profile, 'author_id');
     expect((await loadOne(driver, rel, { id: 1 }))?.bio).toBe('first');
     expect(await loadOne(driver, rel, { id: 2 })).toBeNull();
+    await driver.close();
+  });
+
+  it('loads from hydrated model instances, not just plain rows', async () => {
+    const base = await setup();
+    const MAuthor = defineModel(base, Author);
+    const parents = [await MAuthor.findOrFail(1), await MAuthor.findOrFail(2)];
+    const { driver, reads } = counting(base);
+    const rel = hasMany(Author, Article, 'author_id');
+    const got = await load(driver, rel, parents);
+    expect(reads()).toBe(1);
+    expect(got.get(1)?.map((a) => a.title)).toEqual(['notes', 'objections']);
+    expect(got.get(2)?.map((a) => a.title)).toEqual(['compiler']);
+    await base.close();
+  });
+
+  it('loadOne reads the key from a model instance', async () => {
+    const driver = await setup();
+    const MAuthor = defineModel(driver, Author);
+    const rel = hasOne(Author, Profile, 'author_id');
+    expect((await loadOne(driver, rel, await MAuthor.findOrFail(1)))?.bio).toBe('first');
     await driver.close();
   });
 

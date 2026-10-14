@@ -36,7 +36,7 @@ console.log(byAuthor.get(1)); // [{ id: 1, author_id: 1, title: 'notes' }, ...]
 console.log(byAuthor.get(2)); // [] when an author has none
 ```
 
-`load` collects the distinct parent keys, issues one `WHERE author_id IN (...)`, and groups the results in memory. Two authors or two thousand, it is still one query.
+`load` collects the distinct parent keys, issues one `WHERE author_id IN (...)`, and groups the results in memory. Two authors or two thousand, it is still one query. Parents may be plain rows or hydrated model instances; instances unwrap to their attributes.
 
 ## The relation kinds
 

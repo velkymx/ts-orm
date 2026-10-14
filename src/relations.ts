@@ -11,6 +11,7 @@
 import { buildSoftUpdate, primaryKey } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
 import { timestampNow } from './lifecycle.js';
+import type { ModelInstance } from './model.js';
 import { query, type QueryBuilder } from './query.js';
 import type { Result } from './result.js';
 import { SOFT_COLUMN, hasSoftColumn, requireSoftColumn } from './soft.js';
@@ -160,6 +161,31 @@ export function morphMany<ST extends string, SF extends Fields, TT extends strin
   };
 }
 
+/** A parent key source: a plain row or a hydrated model instance. */
+export type Parent<SF extends Fields> = Partial<RowOf<SF>> | ModelInstance<SF>;
+
+/**
+ * True for a hydrated model instance. Checks the full instance shape, not
+ * just `attributes`, so a plain row with an `attributes` column never
+ * unwraps by accident.
+ */
+function isModelInstance(value: unknown): value is { attributes: Record<string, unknown> } {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as { attributes?: unknown; original?: unknown; toRow?: unknown };
+  return (
+    typeof candidate.attributes === 'object' &&
+    candidate.attributes !== null &&
+    typeof candidate.original === 'object' &&
+    candidate.original !== null &&
+    typeof candidate.toRow === 'function'
+  );
+}
+
+/** Read a parent key source as a plain row, unwrapping model instances. */
+function parentRow(row: Record<string, unknown>): Record<string, unknown> {
+  return isModelInstance(row) ? row.attributes : row;
+}
+
 /** Distinct non-null key values across the given rows. */
 function keySet(rows: readonly Record<string, unknown>[], key: string): BindValue[] {
   const seen = new Set<BindValue>();
@@ -211,14 +237,14 @@ function scoped<TT extends string, TF extends Fields>(
 export async function load<ST extends string, SF extends Fields, TT extends string, TF extends Fields>(
   driver: Driver,
   rel: Relation<ST, SF, TT, TF>,
-  parents: readonly Partial<RowOf<SF>>[],
+  parents: readonly Parent<SF>[],
   opts?: LoadOptions,
 ): Promise<Loaded<TF>> {
   const out: Loaded<TF> = new Map();
   if (parents.length === 0) {
     return out;
   }
-  const rows = parents as readonly Record<string, unknown>[];
+  const rows = (parents as readonly Record<string, unknown>[]).map(parentRow);
 
   switch (rel.kind) {
     case 'hasOne':
@@ -313,11 +339,11 @@ export async function load<ST extends string, SF extends Fields, TT extends stri
 export async function loadOne<ST extends string, SF extends Fields, TT extends string, TF extends Fields>(
   driver: Driver,
   rel: HasOne<ST, SF, TT, TF> | BelongsTo<ST, SF, TT, TF>,
-  parent: Partial<RowOf<SF>>,
+  parent: Parent<SF>,
   opts?: LoadOptions,
 ): Promise<RowOf<TF> | null> {
   const key = rel.kind === 'hasOne' ? rel.localKey : rel.foreignKey;
-  const value = (parent as Record<string, unknown>)[key as string] as BindValue | undefined;
+  const value = parentRow(parent as Record<string, unknown>)[key as string] as BindValue | undefined;
   if (value === undefined || value === null) {
     return null;
   }
