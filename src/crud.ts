@@ -5,7 +5,7 @@
  */
 
 import type { Dialect } from './dialect.js';
-import { safeIdentifier, safeQualified } from './identifiers.js';
+import { safeIdentifier, safeQualified, isQualifiedIdentifier } from './identifiers.js';
 import type { BindValue, Driver } from './driver.js';
 import type { Fields, InsertOf, RowOf, Struct, UpdateOf } from './struct.js';
 import { validatePayload } from './validation.js';
@@ -176,7 +176,7 @@ export function buildSelectWith<Table extends string, F extends Fields>(
     : '';
 
   let orderClause = options.orderBy
-    ? `ORDER BY ${safeIdentifier(options.orderBy, dialect, 'order by column')} ${
+    ? `ORDER BY ${orderTarget(options.orderBy, dialect)} ${
         options.direction?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC'
       }`
     : '';
@@ -193,6 +193,17 @@ export function buildSelectWith<Table extends string, F extends Fields>(
   if (limitClause) sql += ` ${limitClause}`;
 
   return { sql, params };
+}
+
+/**
+ * Render an ORDER BY target: a qualified `table.column` quotes each half,
+ * a bare name quotes as one identifier, anything else throws.
+ */
+function orderTarget(column: string, dialect: Dialect): string {
+  if (isQualifiedIdentifier(column)) {
+    return safeQualified(column, dialect, 'order by column');
+  }
+  return safeIdentifier(column, dialect, 'order by column');
 }
 
 /** Read rows across one or more joins. Row shape is caller-specified. */

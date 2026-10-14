@@ -28,14 +28,19 @@ A builder call compiles in three stages:
    quotes it for the active dialect, and numbers placeholders in bind
    order (`?`, `$n`, `@pN`).
 3. The driver runs the statement: `get` returns rows, `first` caps at
-   one, `count` reuses the filters without order or paging.
+   one, `count` reuses the filters without order or paging, `delete`
+   removes matching rows and reports `affectedRows`.
 
-`toSQL` and `toCountSQL` expose the compiled statement plus params
-without I/O, which doubles as the inspection hatch for debugging.
+`toSQL`, `toCountSQL`, and `toDeleteSQL` expose the compiled statement
+plus params without I/O, which doubles as the inspection hatch for
+debugging.
 
 Empty `IN` lists compile to constant conditions (`1 = 0` for `IN`,
 `1 = 1` for `NOT IN`) so no invalid SQL is ever emitted. `BETWEEN`
 binds two values; `IS NULL` binds none.
+
+Join reads accept qualified `ORDER BY` targets (`posts.id`), quoting
+each half; bare names keep working and malformed qualifiers throw.
 
 ## Metadata
 
