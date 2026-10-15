@@ -33,3 +33,40 @@ jobs:
     - run: npm run build
     - run: npm run hygiene
     - run: npm test
+
+  pg-live:
+
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: tsorm_pg
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js 24.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24.x
+        cache: 'npm'
+    - run: npm ci
+    - run: npm run build
+    - run: npx vitest run tests/driver-pg-live.test.ts
+      env:
+        TS_ORM_TEST_PG: '1'
+        TS_ORM_PG_HOST: localhost
+        TS_ORM_PG_USER: postgres
+        TS_ORM_PG_PASSWORD: secret
+        TS_ORM_PG_DATABASE: tsorm_pg
+        TS_ORM_PG_PORT: '5432'
