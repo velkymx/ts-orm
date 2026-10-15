@@ -47,12 +47,12 @@ const TYPE_MAP: Record<string, FieldType> = {
 
 /** First parenthesized group of a column type, or undefined when bare. */
 function typeArg(rawType: string): string | undefined {
-  return rawType.match(/\((.*?)\)/)?.[1];
+  return rawType.match(/\(([^)]*)\)/)?.[1];
 }
 
 /** Enum values honoring quoted commas, falling back to comma split. */
 function enumValues(rawType: string): readonly string[] {
-  const quoted = rawType.match(/'((?:[^'\\]|\\.)*)'/g);
+  const quoted = rawType.match(/'([^'\\]*(?:\\.[^'\\]*)*)'/g);
   if (quoted) {
     return quoted.map((item) => item.slice(1, -1));
   }
