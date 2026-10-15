@@ -289,7 +289,7 @@ export async function create<Table extends string, F extends Fields>(
 }
 
 /** Column names (excluding the id) that carry a value to write. */
-function updatableColumns(
+export function updatableColumns(
   fields: Fields,
   payload: Record<string, unknown>,
   idKey: string,
