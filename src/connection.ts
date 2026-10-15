@@ -35,7 +35,7 @@ export function getPool(): Pool {
       user: cfg.user,
       password: cfg.password,
       database: cfg.database,
-      port: cfg.port,
+      ...(cfg.port === undefined ? {} : { port: cfg.port }),
     });
   }
   return pool;
