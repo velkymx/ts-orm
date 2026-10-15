@@ -17,6 +17,7 @@ import {
   read,
   readOne,
   remove,
+  updatableColumns,
 } from './crud.js';
 import { validatePayload } from './validation.js';
 import type { BindValue, Driver } from './driver.js';
@@ -333,7 +334,12 @@ export function defineModel<Table extends string, F extends Fields>(
     }
 
     fill(data: Partial<Row>): this {
-      Object.assign(this.attributes, data);
+      const defined = data as Record<string, unknown>;
+      for (const key of Object.keys(defined)) {
+        if (defined[key] !== undefined) {
+          (this.attributes as Record<string, unknown>)[key] = defined[key];
+        }
+      }
       return this;
     }
 
@@ -408,6 +414,10 @@ export function defineModel<Table extends string, F extends Fields>(
       });
       if (violations.length > 0) {
         throw new Error(failMessage('Validation failed', violations.map((v) => v.message)));
+      }
+      if (updatableColumns(struct.fields, storedChanges as Record<string, unknown>, pk).length === 0) {
+        this.lastAffectedRows = 0;
+        return this;
       }
       const { sql, params } = buildUpdate(target.dialect, struct, {
         ...(storedChanges as Record<string, unknown>),

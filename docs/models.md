@@ -44,7 +44,7 @@ A primary key you supply is authoritative: `create` only fills the key from the 
 
 ## Dirty tracking and save
 
-An instance remembers the values it was hydrated with. `fill` merges new values, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns. Every write surfaces its affected rows: `delete` and `forceDelete` return them, while `save` and `restore` record them on `lastAffectedRows`. Zero means the write matched nothing; what that means for the flow is the caller's decision, and counts follow the engine (MySQL reports changed rows unless `CLIENT_FOUND_ROWS` is set):
+An instance remembers the values it was hydrated with. `fill` merges new values, skipping `undefined` so absent patch keys stay clean, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns. Every write surfaces its affected rows: `delete` and `forceDelete` return them, while `save` and `restore` record them on `lastAffectedRows`. Zero means the write matched nothing; what that means for the flow is the caller's decision, and counts follow the engine (MySQL reports changed rows unless `CLIENT_FOUND_ROWS` is set):
 
 ```ts
 const user = await AppUser.find(1);

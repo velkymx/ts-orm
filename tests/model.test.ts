@@ -152,6 +152,29 @@ describe('defineModel (issue 23)', () => {
     await driver.close();
   });
 
+  it('fill ignores undefined so absent patch keys stay clean', async () => {
+    const driver = await setup();
+    class User extends defineModel(driver, UserStruct) {}
+    await User.create({ name: 'bob' });
+    const u = (await User.find(1))!;
+    // exactOptionalPropertyTypes forbids this literal in TS, but JS callers
+    // (Express partial bodies) produce it freely.
+    u.fill({ name: 'bob', email: undefined } as unknown as Parameters<typeof u.fill>[0]);
+    expect(u.isDirty()).toBe(false);
+    await expect(u.save()).resolves.toBe(u);
+    await driver.close();
+  });
+
+  it('save with nothing writable resolves instead of throwing', async () => {
+    const driver = await setup();
+    class User extends defineModel(driver, UserStruct) {}
+    await User.create({ name: 'bob' });
+    const u = new User({ id: 1 });
+    await expect(u.save()).resolves.toBe(u);
+    expect(u.lastAffectedRows).toBe(0);
+    await driver.close();
+  });
+
   it('query exposes the fluent builder for raw rows', async () => {
     const driver = await setup();
     class User extends defineModel(driver, UserStruct) {}
