@@ -42,8 +42,7 @@ export interface ModelInstance<F extends Fields> {
    * Affected rows of the last save, delete, restore, or forceDelete on this
    * instance, null before any write runs. Zero means the write matched
    * nothing; what that means for the flow is the caller's decision.
-   * Counts follow the engine: matched rows everywhere except MySQL, which
-   * reports changed rows unless CLIENT_FOUND_ROWS is set.
+   * Counts are matched rows on every engine.
    */
   lastAffectedRows: number | null;
   /** Insert when keyless, else update dirty fields only. */
