@@ -47,14 +47,51 @@ const TYPE_MAP: Record<string, FieldType> = {
 
 /** First parenthesized group of a column type, or undefined when bare. */
 function typeArg(rawType: string): string | undefined {
-  return rawType.match(/\(([^)]*)\)/)?.[1];
+  const open = rawType.indexOf('(');
+  if (open === -1) {
+    return undefined;
+  }
+  const close = rawType.indexOf(')', open + 1);
+  return close === -1 ? undefined : rawType.slice(open + 1, close);
 }
 
-/** Enum values honoring quoted commas, falling back to comma split. */
+/**
+ * Enum values honoring quoted commas, falling back to comma split. Scans the
+ * string in one linear pass rather than a regex, so a crafted column type
+ * cannot force quadratic backtracking.
+ */
 function enumValues(rawType: string): readonly string[] {
-  const quoted = rawType.match(/'([^'\\]*(?:\\.[^'\\]*)*)'/g);
-  if (quoted) {
-    return quoted.map((item) => item.slice(1, -1));
+  const values: string[] = [];
+  let i = 0;
+  while (i < rawType.length) {
+    if (rawType.charAt(i) !== "'") {
+      i += 1;
+      continue;
+    }
+    i += 1;
+    let value = '';
+    let closed = false;
+    while (i < rawType.length) {
+      const ch = rawType.charAt(i);
+      if (ch === '\\' && i + 1 < rawType.length) {
+        value += ch + rawType.charAt(i + 1);
+        i += 2;
+        continue;
+      }
+      if (ch === "'") {
+        closed = true;
+        i += 1;
+        break;
+      }
+      value += ch;
+      i += 1;
+    }
+    if (closed) {
+      values.push(value);
+    }
+  }
+  if (values.length > 0) {
+    return values;
   }
   const arg = typeArg(rawType) ?? '';
   return arg.length > 0 ? arg.split(',') : [];
