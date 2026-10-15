@@ -186,6 +186,19 @@ describe.runIf(LIVE)('postgres live driver (pg proving)', () => {
     await driver.execute('DROP TABLE "pg_live_nums"', []);
   });
 
+  it('round-trips decimal structs as exact strings', async () => {
+    const Ledger = defineStruct('pg_live_ledger', {
+      id: { type: 'number', required: true, default: 'auto_increment' },
+      amount: { type: 'decimal', required: true },
+    });
+    await driver.execute('DROP TABLE IF EXISTS "pg_live_ledger"', []);
+    await driver.execute('CREATE TABLE "pg_live_ledger" ("id" SERIAL PRIMARY KEY, "amount" NUMERIC NOT NULL)', []);
+    const M = defineModel(driver, Ledger);
+    const m = await M.create({ amount: '12.50' });
+    expect((await M.find(m.toRow().id))?.toRow().amount).toBe('12.50');
+    await driver.execute('DROP TABLE "pg_live_ledger"', []);
+  });
+
   it('narrows selected columns at runtime and type level', async () => {
     const M = defineModel(driver, User);
     await M.create({ name: 'sel', age: 40 });

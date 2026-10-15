@@ -145,6 +145,20 @@ Casts apply at the model layer only; raw builder rows stay in their storage form
 
 The `datetime` cast reads and writes `YYYY-MM-DD HH:MM:SS` strings as UTC. For a plain `DATETIME` column that is self-consistent, the string you store is the string you read back. A MySQL `TIMESTAMP` column is different: the engine converts it between the session time zone and UTC, so a non-UTC session shifts the value while the type still looks correct. Run such sessions in UTC (`time_zone = '+00:00'`) when you rely on the cast, since a stateless cast cannot know the session zone.
 
+## Exact numerics
+
+Money and large identifiers use the `decimal` and `bigint` field types, which stay exact-digit strings end to end and are never coerced through IEEE 754. Passing a number where one belongs is a validation error, not a silent rounding:
+
+```ts
+const Ledger = defineStruct('ledger', {
+  id: { type: 'number', required: true, default: 'auto_increment' },
+  amount: { type: 'decimal', required: true },
+  seq: { type: 'bigint' },
+});
+```
+
+Postgres hands back `NUMERIC` and `BIGINT` as strings natively, and the MySQL pool requests string form, so both round-trip exactly. The builder emits wide scale on engines that default to zero (`DECIMAL(65, 30)` on MySQL), and MySQL pads stored values to the column scale, so compare decimals numerically rather than by string equality. On SQLite use `TEXT` columns (the schema builder emits `TEXT` there and native types elsewhere), since SQLite would otherwise read integers back as lossy numbers.
+
 ## Soft deletes
 
 Soft deletes keep rows in the table and hide them behind a stamped column. Turn them on with `static softDeletes = true` and a `deleted_at` column. The flag without the column throws on every soft path, so you cannot accidentally delete rows physically.

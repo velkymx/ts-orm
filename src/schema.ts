@@ -95,6 +95,27 @@ function typeSql(dialect: Dialect, column: ColumnDef): string {
       return 'TINYINT(1)';
     case 'date':
       return 'DATE';
+    case 'decimal':
+      // SQLite exactness needs TEXT affinity; NUMERIC would coerce through REAL.
+      if (dialect.name === 'sqlite') {
+        return 'TEXT';
+      }
+      // Bare NUMERIC means scale zero on MySQL (DECIMAL defaults to (10,0))
+      // and SQL Server, silently rounding fractions. Emit the widest
+      // lossless form instead; Postgres NUMERIC stays unconstrained and exact.
+      if (dialect.name === 'mysql') {
+        return 'DECIMAL(65, 30)';
+      }
+      if (dialect.name === 'mssql') {
+        return 'DECIMAL(38, 30)';
+      }
+      return 'NUMERIC';
+    case 'bigint':
+      // Same exactness rule as decimal: TEXT on SQLite, native 64-bit elsewhere.
+      if (dialect.name === 'sqlite') {
+        return 'TEXT';
+      }
+      return 'BIGINT';
     case 'datetime':
       if (dialect.name === 'postgres') {
         return 'TIMESTAMP';

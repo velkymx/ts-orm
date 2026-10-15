@@ -72,6 +72,25 @@ describe('create table (issue 24)', () => {
     );
   });
 
+  it('renders exact numerics natively, TEXT on sqlite', () => {
+    const cols: Record<string, ColumnDef> = {
+      amount: { type: 'decimal', required: true },
+      seq: { type: 'bigint' },
+    };
+    expect(buildCreateTable(mysql, 't', cols)).toBe(
+      'CREATE TABLE IF NOT EXISTS `t` (`amount` DECIMAL(65, 30) NOT NULL, `seq` BIGINT)',
+    );
+    expect(buildCreateTable(postgres, 't', cols)).toBe(
+      'CREATE TABLE IF NOT EXISTS "t" ("amount" NUMERIC NOT NULL, "seq" BIGINT)',
+    );
+    expect(buildCreateTable(sqlite, 't', cols)).toBe(
+      'CREATE TABLE IF NOT EXISTS "t" ("amount" TEXT NOT NULL, "seq" TEXT)',
+    );
+    expect(buildCreateTable(mssql, 't', cols)).toBe(
+      "IF OBJECT_ID(N't', N'U') IS NULL CREATE TABLE [t] ([amount] DECIMAL(38, 30) NOT NULL, [seq] BIGINT)",
+    );
+  });
+
   it('rejects hostile identifiers and bad rules', () => {
     expect(() => buildCreateTable(mysql, 'x; DROP', POSTS)).toThrow();
     expect(() =>

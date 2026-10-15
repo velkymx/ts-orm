@@ -41,4 +41,14 @@ describe('validateRow (issue 104)', () => {
   it('ignores absent optional columns and extra columns', () => {
     expect(validateRow(fields, { id: 1, email: 'a@b.co', extra: true })).toEqual([]);
   });
+
+  it('holds exact numerics to strings', () => {
+    const money = defineStruct('ledger', {
+      amount: { type: 'decimal', required: true },
+      seq: { type: 'bigint' },
+    }).fields;
+    expect(validateRow(money, { amount: '12.50', seq: '9007199254740993' })).toEqual([]);
+    expect(validateRow(money, { amount: 12.5 })).toEqual(['amount must be an exact decimal string']);
+    expect(validateRow(money, { amount: '1', seq: 7 })).toEqual(['seq must be an exact integer string']);
+  });
 });

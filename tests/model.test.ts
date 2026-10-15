@@ -165,6 +165,27 @@ describe('defineModel (issue 23)', () => {
     await driver.close();
   });
 
+  it('round-trips exact numerics as strings', async () => {
+    const driver = createSqliteDriver({ filename: ':memory:' });
+    await driver.execute('CREATE TABLE "ledger" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "amount" TEXT, "seq" TEXT)', []);
+    const Ledger = defineStruct('ledger', {
+      id: { type: 'number', required: true, default: 'auto_increment' },
+      amount: { type: 'decimal', required: true },
+      seq: { type: 'bigint' },
+    });
+    class M extends defineModel(driver, Ledger) {}
+    const m = await M.create({ amount: '12.50', seq: '9007199254740993' });
+    expect((await M.find(m.toRow().id))?.toRow()).toEqual({
+      id: m.toRow().id,
+      amount: '12.50',
+      seq: '9007199254740993',
+    });
+    await expect(M.create({ amount: 12.5 } as unknown as { amount: string })).rejects.toThrow(
+      /exact decimal string/,
+    );
+    await driver.close();
+  });
+
   it('save with nothing writable resolves instead of throwing', async () => {
     const driver = await setup();
     class User extends defineModel(driver, UserStruct) {}

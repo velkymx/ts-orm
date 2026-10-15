@@ -73,6 +73,16 @@ export function isValidBoolean(value: unknown): boolean {
   );
 }
 
+/** Exact decimal digits, never coerced: numbers are already lossy, so only strings pass. */
+function isExactDecimal(value: unknown): boolean {
+  return typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value);
+}
+
+/** Exact integer digits with the same never-coerce rule. */
+function isExactInteger(value: unknown): boolean {
+  return typeof value === 'string' && /^-?\d+$/.test(value);
+}
+
 /** A single payload validation failure, tied to the offending column. */
 export interface ValidationError {
   readonly field: string;
@@ -128,6 +138,14 @@ export function validatePayload(
       errors.push({ field: name, message: `${name} must be a number` });
     }
 
+    if (def.type === 'decimal' && !isExactDecimal(value)) {
+      errors.push({ field: name, message: `${name} must be an exact decimal string` });
+    }
+
+    if (def.type === 'bigint' && !isExactInteger(value)) {
+      errors.push({ field: name, message: `${name} must be an exact integer string` });
+    }
+
     if (def.type === 'uuid' && !isValidUUID(value)) {
       errors.push({ field: name, message: `${name} must be a valid UUID` });
     }
@@ -173,6 +191,12 @@ export function validateRow<F extends Fields>(fields: F, row: Record<string, unk
     }
     if (def.type === 'number' && (typeof value !== 'number' || Number.isNaN(value))) {
       errors.push(`${name} must be a number`);
+    }
+    if (def.type === 'decimal' && !isExactDecimal(value)) {
+      errors.push(`${name} must be an exact decimal string`);
+    }
+    if (def.type === 'bigint' && !isExactInteger(value)) {
+      errors.push(`${name} must be an exact integer string`);
     }
     if (def.type === 'string' && typeof value !== 'string') {
       errors.push(`${name} must be a string`);
