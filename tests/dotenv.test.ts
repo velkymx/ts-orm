@@ -54,9 +54,9 @@ describe('dotenv autoload (issue 94)', () => {
       expect(lastLine(run.stdout)).toEqual({
         host: 'dotenv-host',
         user: 'dotenv-user',
-        password: 'dotenv-secret',
         database: 'dotenv-db',
         port: 3307,
+        hasPassword: true,
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -86,9 +86,9 @@ describe('dotenv autoload (issue 94)', () => {
       expect(lastLine(run.stdout)).toEqual({
         host: 'explicit-host',
         user: 'explicit-user',
-        password: '',
         database: 'explicit-db',
         port: 3307,
+        hasPassword: false,
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
