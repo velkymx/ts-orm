@@ -1,6 +1,6 @@
 {
   "name": "@velkymx/ts-orm",
-  "version": "2.0.0-dev.0",
+  "version": "2.0.0",
   "description": "A lightweight, type-safe TypeScript ORM built on MySQL2 using self-documenting structs",
   "type": "module",
   "repository": {
