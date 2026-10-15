@@ -1,6 +1,6 @@
 {
   "name": "@velkymx/ts-orm",
-  "version": "2.0.0-dev.0",
+  "version": "2.0.0",
   "description": "A lightweight, type-safe TypeScript ORM built on MySQL2 using self-documenting structs",
   "type": "module",
   "repository": {
@@ -11,12 +11,20 @@
     "url": "https://github.com/velkymx/ts-orm/issues"
   },
   "homepage": "https://github.com/velkymx/ts-orm#readme",
-  "main": "src/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
+  "files": [
+    "dist"
+  ],
   "bin": {
-    "ts-orm": "./bin/cli.js"
+    "ts-orm": "./dist/bin/cli.js"
   },
   "keywords": [
     "orm",
@@ -53,6 +61,7 @@
     "@types/pg": "^8.23.1",
     "eslint": "^10.12.0",
     "mssql": "^12.7.6",
+    "oxlint": "^1.88.0",
     "pg": "^8.23.1",
     "prettier": "^3.5.3",
     "typescript": "^7.0.2",
@@ -60,8 +69,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "hygiene": "node scripts/check-hygiene.mjs",
+    "postbuild": "chmod +x dist/bin/cli.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "oxlint src tests",
+    "prepublishOnly": "npm run build && npm test"
   }
 }

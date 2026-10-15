@@ -13,7 +13,9 @@ export type FieldType =
   | 'date'
   | 'datetime'
   | 'boolean'
-  | 'enum';
+  | 'enum'
+  | 'decimal'
+  | 'bigint';
 
 /** One column definition. Options act as inline "struct tags" documenting intent. */
 export interface FieldDef {
@@ -100,5 +102,13 @@ export function defineStruct<Table extends string, const F extends Fields>(
   table: Table,
   fields: F,
 ): Struct<Table, F> {
-  return { table, fields };
+  const frozen: Record<string, FieldDef> = {};
+  for (const name of Object.keys(fields)) {
+    const def = fields[name] as FieldDef;
+    frozen[name] = Object.freeze({
+      ...def,
+      ...(def.enum === undefined ? {} : { enum: Object.freeze([...def.enum]) }),
+    });
+  }
+  return { table, fields: Object.freeze(frozen) as F };
 }

@@ -56,3 +56,18 @@ export function safeQualified(
   const column = value.slice(dot + 1);
   return `${dialect.quoteIdent(table)}.${dialect.quoteIdent(column)}` as SafeIdentifier;
 }
+
+/**
+ * Escape a user value for use inside a LIKE pattern. Percent, underscore,
+ * and the escape character match literally after this, so pair the result
+ * with an explicit ESCAPE clause. Values stay bound, never interpolated.
+ */
+export function escapeLike(value: string, escape = '\\'): string {
+  return value
+    .split(escape)
+    .join(`${escape}${escape}`)
+    .split('%')
+    .join(`${escape}%`)
+    .split('_')
+    .join(`${escape}_`);
+}

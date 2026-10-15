@@ -1,69 +1,98 @@
 # Contributing to ts-orm
 
-First off, thanks for your interest in contributing to `ts-orm` – your time and effort help make this project better for everyone.
+Thanks for your interest in contributing. This project values clarity,
+consistency, and practical functionality.
 
-This project is maintained with a focus on clarity, consistency, and practical functionality. To help keep things smooth and collaborative, please follow the guidelines below.
+## Development setup
 
----
+Requirements: Node 24 or later, npm, and optionally a local MySQL for
+live exercises (see below).
 
-## Ground Rules
+```bash
+git clone https://github.com/velkymx/ts-orm.git
+cd ts-orm
+npm install
+npm run build
+```
 
-1. **Post an Issue Before You Code**
-   - Open an issue describing the feature, fix, or change you'd like to work on.
-   - Provide as much context as possible (why it's needed, possible approaches, etc.).
-   - Wait for discussion/approval before starting implementation.
+MySQL is optional. The suite runs on SQLite in memory by default. For a
+live server, configure `DB_HOST`, `DB_USER`, `DB_PASSWORD`,
+`DB_DATABASE`, and `DB_PORT`, then run the demo app in `../ts-orm-demo`
+(migrate, seed, start) to exercise the full stack by hand.
 
-2. **Branch Naming Convention**
-   - Name your branch based on the issue number and topic.
-   - Example: `12-add-schema-helper` or `45-fix-update-response`.
+## Testing
 
-3. **Keep PRs Focused**
-   - A pull request should resolve **one** issue or feature.
-   - Don’t include unrelated changes, formatting, or refactoring in a PR unless it’s part of the issue.
+```bash
+npm run typecheck   # strict tsc, no emit
+npm run lint        # oxlint over src, tests, bin
+npm run build       # emit dist with declarations
+npm run test        # vitest suite
+```
 
-4. **Pull Requests Must Be Reviewed**
-   - All PRs require review and approval before being merged.
-   - Write clear commit messages and include a link to the issue being addressed.
-   - Add unit tests for any new logic and update existing tests if necessary.
+CI runs all four on pushes and pull requests to `main` and `develop`,
+across Node 24 and 26. New logic needs tests that fail before the fix
+and pass after; sqlite-backed integration tests are preferred over
+mocks. Runnable API samples live in `examples/` and must keep passing:
+`node examples/basic-crud.mjs` and siblings run against the built
+barrel, so rebuild first.
 
----
+## Pull requests
 
-## Commit Message Convention
+- Open an issue before coding; one branch and one PR per issue, named
+  `feat/issue-N-topic` or `fix/issue-N-topic`, branched from `develop`
+  and targeted back at `develop` (never `main`).
+- Keep PRs focused: no unrelated changes, formatting, or refactoring.
+- All PRs require review before merge.
+- A PR that changes the exports in `src/index.ts` updates
+  `docs/api-reference.md` in the same PR, so the documented surface never
+  drifts from the barrel.
 
-One logical change per commit, every commit keeps tests green. Format follows the 7 rules popularized by Chris Beams and summarized in the AJB Blog guide to Git best practices (https://blog.ajb.bz/git-best-practices-a-guide-for-new-developers):
+### Commit Message Convention
 
-- Subject: `type(scope): Imperative summary`, no period, aim under 50 chars after the prefix.
+One logical change per commit, every commit keeps tests green. Format
+follows the 7 rules popularized by Chris Beams and summarized in the
+AJB Blog guide to Git best practices
+(https://blog.ajb.bz/git-best-practices-a-guide-for-new-developers):
+
+- Subject: `Imperative summary`, capitalized, no period, under 50 chars. No type or scope prefixes.
 - Blank line, then a body explaining what changed and why (wrap near 72 cols).
 - Reference the issue in the body with `Refs #N`, and `Closes #N` only on the PR description.
 - Never work directly on the primary branch; one branch and one PR per issue.
 
----
+## Code style
 
-## Development Workflow
+- TypeScript strict, `erasableSyntaxOnly`: no enums, namespaces, or
+  parameter properties. No `any`; narrow `unknown` instead.
+- Prefer clarity over cleverness; small single-purpose functions.
+- Identifiers pass the allowlist and are quoted; values are always
+  bound, never interpolated. No em-dashes or en-dashes in prose.
 
-1. Fork the repo and clone your fork.
-2. Create a new branch from `main`.
-3. Commit your changes with clear messages.
-4. Push your branch to your fork.
-5. Submit a pull request to the `main` branch of this repo.
-6. Reference the relevant issue number in the pull request description.
+## Versioning and the public surface
 
----
+The public API is exactly the top-level barrel (`@velkymx/ts-orm`),
+enumerated in [docs/api-reference.md](docs/api-reference.md). A deep
+import into `src/` is internal and carries no stability promise.
 
-## Code Style
+The package is on the `2.0.0-dev.x` prerelease line and the surface is
+not frozen: breaking changes to the listed exports are allowed and
+advance the `dev.N` segment. The surface freezes at `2.0.0`, after which
+standard semantic versioning applies against the API reference: removing
+or re-signing a listed export is a major bump, adding one is a minor, a
+behavior fix is a patch.
 
-- Use modern ES6+ syntax.
-- Prefer clarity over cleverness.
-- Keep function size minimal and single-responsibility.
-- Use consistent formatting (we’ll add prettier/ESLint config soon).
+There is no changelog file. The record of a release is the set of
+GitHub issues closed for it, linked from the release notes for its tag.
 
----
+## Release process
 
-## Running Tests
-
-Before submitting a PR, make sure tests pass:
-
-```bash
-npm install
-npm test
-```
+1. Land everything on `develop` first; `main` tracks releases.
+2. Bump `version` in `package.json`.
+3. Verify the gate: `npm run typecheck && npm run lint && npm run build && npm test`.
+4. Verify the tarball ships only the runtime plus metadata:
+   `npm pack --dry-run` must list `dist`, `bin`, `package.json`,
+   plus the auto-included readme and license. No `src`, `tests`,
+   `docs`, or `examples`.
+5. Verify publish health with `npx publint` and
+   `npx @arethetypeswrong/cli --pack` (the one expected note is the
+   ESM-only CJS warning; the package is ESM-only by design).
+6. Publish from a clean tree; `prepublishOnly` rebuilds and retests.

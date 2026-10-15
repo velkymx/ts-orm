@@ -58,4 +58,33 @@ describe('resolveConfig', () => {
   it('throws listing every missing required key', () => {
     expect(() => resolveConfig()).toThrow(/DB_HOST.*DB_USER.*DB_DATABASE/s);
   });
+
+  it('rejects non-numeric and out-of-range ports naming the value', () => {
+    process.env.DB_HOST = 'h';
+    process.env.DB_USER = 'u';
+    process.env.DB_DATABASE = 'd';
+    process.env.DB_PORT = 'notaport';
+    expect(() => resolveConfig()).toThrow(/port.*notaport/i);
+    process.env.DB_PORT = '99999';
+    expect(() => resolveConfig()).toThrow(/port/i);
+    delete process.env.DB_PORT;
+    expect(() => resolveConfig({ port: Number.NaN })).toThrow(/port/i);
+  });
+
+  it('skips the port for unix socket hosts', () => {
+    process.env.DB_HOST = '/tmp';
+    process.env.DB_USER = 'u';
+    process.env.DB_DATABASE = 'd';
+    const cfg = resolveConfig();
+    expect(cfg.host).toBe('/tmp');
+    expect(cfg.port).toBeUndefined();
+  });
+
+  it('keeps an explicit port on socket hosts and still validates it', () => {
+    const cfg = resolveConfig({ host: '/tmp', user: 'u', database: 'd', port: 5432 });
+    expect(cfg.port).toBe(5432);
+    expect(() => resolveConfig({ host: '/tmp', user: 'u', database: 'd', port: 99999 })).toThrow(
+      /port/i,
+    );
+  });
 });

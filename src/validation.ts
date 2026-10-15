@@ -73,6 +73,16 @@ export function isValidBoolean(value: unknown): boolean {
   );
 }
 
+/** Exact decimal digits, never coerced: numbers are already lossy, so only strings pass. */
+function isExactDecimal(value: unknown): boolean {
+  return typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value);
+}
+
+/** Exact integer digits with the same never-coerce rule. */
+function isExactInteger(value: unknown): boolean {
+  return typeof value === 'string' && /^-?\d+$/.test(value);
+}
+
 /** A single payload validation failure, tied to the offending column. */
 export interface ValidationError {
   readonly field: string;
@@ -128,6 +138,14 @@ export function validatePayload(
       errors.push({ field: name, message: `${name} must be a number` });
     }
 
+    if (def.type === 'decimal' && !isExactDecimal(value)) {
+      errors.push({ field: name, message: `${name} must be an exact decimal string` });
+    }
+
+    if (def.type === 'bigint' && !isExactInteger(value)) {
+      errors.push({ field: name, message: `${name} must be an exact integer string` });
+    }
+
     if (def.type === 'uuid' && !isValidUUID(value)) {
       errors.push({ field: name, message: `${name} must be a valid UUID` });
     }
@@ -153,5 +171,51 @@ export function validatePayload(
     }
   }
 
+  return errors;
+}
+
+/**
+ * Check a raw database row against the struct, returning messages. Unlike
+ * validatePayload this is strict about runtime types: a string where a
+ * number belongs fails, because drivers hand back engine shapes, not app
+ * shapes. Use it at ingestion boundaries; leave it off hot paths.
+ */
+export function validateRow<F extends Fields>(fields: F, row: Record<string, unknown>): string[] {
+  const errors: string[] = [];
+  for (const name of Object.keys(fields)) {
+    const def = fields[name]!;
+    const value = row[name];
+    if (value === null || value === undefined) {
+      if (def.required) errors.push(`${name} is required`);
+      continue;
+    }
+    if (def.type === 'number' && (typeof value !== 'number' || Number.isNaN(value))) {
+      errors.push(`${name} must be a number`);
+    }
+    if (def.type === 'decimal' && !isExactDecimal(value)) {
+      errors.push(`${name} must be an exact decimal string`);
+    }
+    if (def.type === 'bigint' && !isExactInteger(value)) {
+      errors.push(`${name} must be an exact integer string`);
+    }
+    if (def.type === 'string' && typeof value !== 'string') {
+      errors.push(`${name} must be a string`);
+    }
+    if (def.type === 'boolean' && typeof value !== 'boolean') {
+      errors.push(`${name} must be a boolean`);
+    }
+    if (def.type === 'uuid' && !isValidUUID(value)) {
+      errors.push(`${name} must be a valid UUID`);
+    }
+    if (def.type === 'datetime' && !isValidDatetime(value)) {
+      errors.push(`${name} must be in format YYYY-MM-DD HH:MM:SS`);
+    }
+    if (def.type === 'date' && !isValidDate(value)) {
+      errors.push(`${name} must be in format YYYY-MM-DD`);
+    }
+    if (def.enum && !def.enum.includes(value as string)) {
+      errors.push(`${name} must be one of ${def.enum.join(', ')}`);
+    }
+  }
   return errors;
 }

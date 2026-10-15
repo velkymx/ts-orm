@@ -39,6 +39,24 @@ describe('validatePayload insert mode (skipAutoIncrement)', () => {
   });
 });
 
+describe('validatePayload exact numerics (issue 181)', () => {
+  const money = defineStruct('ledger', {
+    id: { type: 'number', required: true, default: 'auto_increment' },
+    amount: { type: 'decimal', required: true },
+    seq: { type: 'bigint' },
+  }).fields;
+
+  it('accepts exact-digit strings', () => {
+    expect(validatePayload(money, { amount: '12.50', seq: '9007199254740993' }, { skipAutoIncrement: true })).toEqual([]);
+  });
+
+  it('rejects lossy numbers and malformed strings', () => {
+    expect(validatePayload(money, { amount: 12.5 }, { skipAutoIncrement: true }).map((e) => e.field)).toEqual(['amount']);
+    expect(validatePayload(money, { amount: '12.xx' }, { skipAutoIncrement: true }).map((e) => e.field)).toEqual(['amount']);
+    expect(validatePayload(money, { amount: '7', seq: '9x' }, { skipAutoIncrement: true }).map((e) => e.field)).toEqual(['seq']);
+  });
+});
+
 describe('validatePayload partial mode', () => {
   it('skips absent fields so partial updates pass', () => {
     const errors = validatePayload(fields, { email: 'x@y.co' }, { partial: true });

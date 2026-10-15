@@ -20,6 +20,7 @@ function fakeDriver(dialect = mysql): Driver {
     query: async <Row>(): Promise<Row[]> => [],
     execute: async () => ({ affectedRows: 0 }),
     close: async () => {},
+    [Symbol.asyncDispose]: async () => {},
   };
 }
 
@@ -55,6 +56,13 @@ describe('query builder operators', () => {
       sql: 'SELECT * FROM `users` WHERE `name` LIKE ?',
       params: ['%bob%'],
     });
+  });
+
+  it('rejects operators outside the allowlist instead of interpolating them', () => {
+    expect(() => query(fakeDriver(), User).where('age', 'IS NOT NULL OR 1=1 --' as never, 0)).toThrow(
+      /operator/i,
+    );
+    expect(() => query(fakeDriver(), User).orWhere('age', 'DROP' as never, 1)).toThrow(/operator/i);
   });
 
   it('whereIn expands placeholders, empty IN is always false', () => {
