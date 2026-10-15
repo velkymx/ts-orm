@@ -22,8 +22,7 @@ guides it links: [Queries](queries.md), [Models](models.md),
   not plain numbers.
 - Results, not throws, for operations. CRUD returns a `Result` envelope
   discriminated on `success`; only `findOrFail` (and model equivalents)
-  throw `NotFoundError`, and only `paginate` throws on a failed count or
-  read, since there is no partial page to report.
+  throw `NotFoundError`.
 - Zero-dependency core. Engine clients (`mysql2`, `pg`, `mssql`) sit
   behind the `Driver` contract; SQLite adds nothing on Node 24+.
 - Zero-setup default. `createDefaultDriver()` picks the engine from

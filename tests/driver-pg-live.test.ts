@@ -111,8 +111,8 @@ describe.runIf(LIVE)('postgres live driver (pg proving)', () => {
     const sum = await query(driver, User).sum('age');
     expect(sum.success && sum.data).toBe(30);
     const page = await query(driver, User).orderBy('id', 'asc').paginate(1, 1);
-    expect(page.total).toBe(2);
-    expect(page.data).toHaveLength(1);
+    expect(page.success && page.data.total).toBe(2);
+    expect(page.success && page.data.data).toHaveLength(1);
   });
 
   it('commits and rolls back real transactions', async () => {

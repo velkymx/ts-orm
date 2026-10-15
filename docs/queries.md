@@ -139,10 +139,12 @@ const average = await query(driver, User).where('role', 'staff').avg('age');
 
 ```ts
 const result = await query(driver, User).orderBy('age', 'asc').paginate(1, 20);
-console.log(result.total, result.lastPage, result.data);
+if (result.success) {
+  console.log(result.data.total, result.data.lastPage, result.data.data);
+}
 ```
 
-Unlike the other runners, `paginate` returns the page directly and throws if the underlying count or read fails, since there is no partial page to report.
+Like every other runner, `paginate` returns a `Result`: count or read failures come back as failures with mapped messages, never throws.
 
 ## Deleting
 

@@ -10,7 +10,7 @@ import type { BuiltStatement } from './crud.js';
 import { guarded } from './crud.js';
 import type { BindValue, Driver } from './driver.js';
 import type { Fields, RowOf, Struct } from './struct.js';
-import { ok, type Result } from './result.js';
+import { ok, fail, type Result } from './result.js';
 
 /** Comparison operators accepted by where and orWhere. */
 export type ComparisonOperator =
@@ -541,26 +541,29 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
     this: QueryBuilder<Table, F>,
     page: number,
     perPage: number,
-  ): Promise<Page<RowOf<F>>>;
-  async paginate(page: number, perPage: number): Promise<Page<SelectedRow<F, S>>>;
-  async paginate(page: number, perPage: number): Promise<Page<RowOf<F>>> {
+  ): Promise<Result<Page<RowOf<F>>>>;
+  async paginate(page: number, perPage: number): Promise<Result<Page<SelectedRow<F, S>>>>;
+  async paginate(page: number, perPage: number): Promise<Result<Page<RowOf<F>>>> {
     const safePage = Number.isInteger(page) && page > 0 ? page : 1;
     const safePerPage = Number.isInteger(perPage) ? Math.min(100, Math.max(1, perPage)) : 10;
     const total = await this.count();
     if (!total.success) {
-      throw new Error(total.errors.join(', '));
+      return fail(total.message, total.errors);
     }
     const rows = await this.clone().limit(safePerPage).offset((safePage - 1) * safePerPage).get();
     if (!rows.success) {
-      throw new Error(rows.errors.join(', '));
+      return fail(rows.message, rows.errors);
     }
-    return {
-      data: rows.data,
-      total: total.data,
-      page: safePage,
-      perPage: safePerPage,
-      lastPage: Math.ceil(total.data / safePerPage),
-    };
+    return ok(
+      {
+        data: rows.data,
+        total: total.data,
+        page: safePage,
+        perPage: safePerPage,
+        lastPage: Math.ceil(total.data / safePerPage),
+      },
+      'Page retrieved',
+    );
   }
 
   /** Compile the DELETE over the same filters, ignoring order and paging. Raw hatch. */
