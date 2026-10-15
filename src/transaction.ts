@@ -93,7 +93,6 @@ export async function transaction<T>(
   try {
     const result = await txScope.run(handle.tx, () => fn(handle.tx));
     await handle.commit();
-    await drainAfterCommit(handle.tx);
     return result;
   } catch (error) {
     try {
