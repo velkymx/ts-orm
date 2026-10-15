@@ -27,6 +27,9 @@ export type ComparisonOperator =
 /** Join mode between sibling conditions. */
 export type BooleanOp = 'AND' | 'OR';
 
+/** Row lock modes for SELECT inside a transaction. Share locks allow concurrent reads. */
+export type LockMode = 'update' | 'share';
+
 /** Aggregate functions beyond COUNT. */
 export type AggregateFn = 'SUM' | 'AVG' | 'MIN' | 'MAX';
 
@@ -79,6 +82,21 @@ function normalizeOperator(op: ComparisonOperator): string {
 
 interface Counter {
   n: number;
+}
+
+/**
+ * Render the trailing lock clause for the dialect. SQLite locks through
+ * its transaction, and mssql needs a FROM-clause hint instead, so both
+ * throw rather than silently not locking.
+ */
+function compileLock(dialect: Dialect, mode: LockMode): string {
+  if (dialect.name === 'postgres') {
+    return mode === 'share' ? ' FOR SHARE' : ' FOR UPDATE';
+  }
+  if (dialect.name === 'mysql') {
+    return mode === 'share' ? ' LOCK IN SHARE MODE' : ' FOR UPDATE';
+  }
+  throw new Error(`Row locking is not supported on ${dialect.name}: lock inside a transaction instead`);
 }
 
 function compileNode(
@@ -175,6 +193,7 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
   private offsetVal: number | undefined = undefined;
   private softColumn: string | null = null;
   private includeTrashed = false;
+  private lockMode: LockMode | undefined = undefined;
 
   constructor(driver: Driver, struct: Struct<Table, F>) {
     this.driver = driver;
@@ -196,6 +215,7 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
     copy.offsetVal = this.offsetVal;
     copy.softColumn = this.softColumn;
     copy.includeTrashed = this.includeTrashed;
+    copy.lockMode = this.lockMode;
     return copy as this;
   }
 
@@ -337,6 +357,17 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
     return this;
   }
 
+  /**
+   * Lock selected rows for a read-modify-write inside a transaction.
+   * Meaningful only when executed on a tx handle; elsewhere the engine
+   * releases the lock at statement end. Throws at compile time on
+   * sqlite and mssql, which have no SELECT-level lock spelling.
+   */
+  forUpdate(mode: LockMode = 'update'): this {
+    this.lockMode = mode;
+    return this;
+  }
+
   /** Restrict the SELECT column list, defaults to all columns. */
   /**
    * Restrict the SELECT column list, narrowing the row type to match.
@@ -404,6 +435,7 @@ export class QueryBuilder<Table extends string, F extends Fields, S extends keyo
     let sql = `SELECT ${columns} FROM ${table}${where}`;
     if (order) sql += order;
     if (paging) sql += ` ${paging}`;
+    if (this.lockMode !== undefined) sql += compileLock(dialect, this.lockMode);
     return { sql, params };
   }
 
