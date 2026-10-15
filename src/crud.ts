@@ -212,7 +212,13 @@ function orderTarget(column: string, dialect: Dialect): string {
   return safeIdentifier(column, dialect, 'order by column');
 }
 
-/** Read rows across one or more joins. Row shape is caller-specified. */
+/**
+ * Read rows across one or more joins. Unannotated calls return untyped rows;
+ * an explicit `Row` generic is a caller assertion, exactly like
+ * `driver.query<Row>`, with no runtime check behind it. Over shared column
+ * names `SELECT *` keeps the later table's value, so project explicitly
+ * when both sides matter.
+ */
 export async function readWith<Row = Record<string, unknown>>(
   driver: Driver,
   struct: Struct<string, Fields>,
