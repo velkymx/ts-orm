@@ -61,6 +61,16 @@ type _update = Expect<
 
 type _table = Expect<Equal<typeof User.table, 'users'>>;
 
+const Money = defineStruct('ledger', {
+  id: { type: 'number', required: true, default: 'auto_increment' },
+  amount: { type: 'decimal', required: true },
+  seq: { type: 'bigint' },
+});
+
+type _money = Expect<
+  Equal<RowOf<typeof Money.fields>, { id: number; amount: string; seq?: string }>
+>;
+
 describe('defineStruct runtime shape', () => {
   it('carries the table name', () => {
     expect(User.table).toBe('users');
@@ -93,7 +103,7 @@ describe('defineStruct runtime shape', () => {
 describe('type-level inference', () => {
   it('row / insert / update / table shapes compile', () => {
     // Reference the assertions so the module keeps them; failures surface in tsc.
-    const checks: [_row, _insert, _update, _table] = [true, true, true, true];
+    const checks: [_row, _insert, _update, _table, _money] = [true, true, true, true, true];
     expect(checks.every(Boolean)).toBe(true);
   });
 });

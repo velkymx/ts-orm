@@ -13,7 +13,9 @@ export type FieldType =
   | 'date'
   | 'datetime'
   | 'boolean'
-  | 'enum';
+  | 'enum'
+  | 'decimal'
+  | 'bigint';
 
 /** One column definition. Options act as inline "struct tags" documenting intent. */
 export interface FieldDef {

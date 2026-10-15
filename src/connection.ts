@@ -36,6 +36,9 @@ export function getPool(): Pool {
       password: cfg.password,
       database: cfg.database,
       ...(cfg.port === undefined ? {} : { port: cfg.port }),
+      // BIGINT and DECIMAL arrive as exact-digit strings, matching pg.
+      supportBigNumbers: true,
+      bigNumberStrings: true,
     });
   }
   return pool;
