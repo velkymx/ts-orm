@@ -43,7 +43,7 @@ configure({
 const driver = createMysqlDriver();
 ```
 
-The environment keys are `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`, and `DB_PORT` (default 3306). Importing the library loads a `.env` file once, without overriding anything already set, so a local `.env` is enough to start. Postgres and SQL Server take the same settings through `configurePostgres` and `configureMssql`. Reconfigure only when quiescent: the old pool drains in the background while new work takes a fresh one.
+The environment keys are `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`, and `DB_PORT` (default 3306), plus `DB_DIALECT` to pick the engine and `DB_FILE` for the SQLite file path. Importing the library loads a `.env` file once, without overriding anything already set, so a local `.env` is enough to start. Postgres and SQL Server take the same settings through `configurePostgres` and `configureMssql`. Reconfigure only when quiescent: the old pool drains in the background while new work takes a fresh one.
 
 If you would rather let the environment pick the engine too, `createDefaultDriver()` reads `DB_DIALECT` (one of `mysql`, `postgres`, `sqlite`, `mssql`, defaulting to `mysql`) and returns the matching driver without opening a connection yet. When it selects SQLite, it reads the file path from `DB_FILE`, falling back to an in-memory database when that is unset.
 
