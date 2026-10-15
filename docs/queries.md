@@ -153,6 +153,18 @@ const removed = await query(driver, User).where('role', 'banned').delete();
 console.log(removed.data.affectedRows);
 ```
 
+## Locking rows
+
+`forUpdate` appends a row lock for read-modify-write flows, `FOR UPDATE` by default or `FOR SHARE` for shared reads. Locks only hold inside a transaction, so execute the query on a tx handle:
+
+```ts
+await transaction(driver, async (tx) => {
+  const found = await query(tx, User).where('id', 1).forUpdate().first();
+});
+```
+
+Postgres and MySQL render their native spellings (`LOCK IN SHARE MODE` on MySQL). SQLite and SQL Server have no `SELECT`-level lock and throw at compile time; on SQLite the transaction itself is already exclusive.
+
 ## Inspecting the SQL
 
 Every runner has a compile-only counterpart that returns the statement and its bound parameters without touching the database. Use them to debug or to hand the SQL to something else:
