@@ -1,14 +1,25 @@
 # ts-orm
 
-ts-orm is a small, type-safe TypeScript ORM you can read in an afternoon. You declare each table once as a plain struct, and the library infers your row, insert, and update types from that single declaration. The shape in your database and the shape your editor checks never drift apart, because there is only one of them.
+A type-safe TypeScript ORM small enough to hold in your head. One struct declaration drives your row types, validation, SQL, and DDL. No codegen, no decorators, no metadata reflection: zero dependencies in the core, and the only runtime dependency is `mysql2` for the MySQL engine. When something breaks at 2am you read a thirty-line function, not a framework's internals. This codebase has been read line by line, and that legibility is the point. Almost no ORM can say it.
 
-It stays out of your way. No decorators, no code generation step, no base-class config to learn, and no runtime dependencies in the core. The same code runs on MySQL, Postgres, SQLite, and SQL Server, so you can build against an in-memory SQLite database and ship on Postgres without rewriting a single query. Every value is bound and every table and column name is validated before it reaches the database, so the usual injection mistakes are not even reachable.
-
-You pick the altitude. Direct functions handle the simple reads and writes, a fluent builder covers operators, grouped logic, joins, and pagination, and a model class gives you dirty tracking, hooks, casts, timestamps, soft deletes, and relations when you want an active-record feel. It does not try to be your whole backend: no auth, no caching, and no schema magic beyond an explicit migration runner. If you want a data layer that is type-safe, portable across engines, and small enough to keep in your head, keep reading.
+The same code runs on MySQL, Postgres, SQLite, and SQL Server, so you build against an in-memory SQLite database and ship on Postgres without rewriting a single query.
 
 ```bash
 npm i @velkymx/ts-orm
 ```
+
+## It refuses to lie to you
+
+- Validation failures name the column. A bad payload fails before any SQL reaches the database, with a message that points at the field.
+- Driver errors come back mapped to a safe message. The full detail goes to your injectable logger, never raw schema in the response.
+- A missing row is `null`. Not an exception, and not an empty result pretending to be data.
+- `select('name')` has the type `{ name: string }`, not the whole row with the other columns lying about being present.
+
+Every one of these is pinned by the test suite.
+
+## Explicit over magic
+
+The driver is a parameter, not ambient state. A transaction is a handle you pass to each call, so a read is never accidentally inside or outside it. Soft deletes never cascade unless you ask them to. The few places the library conveniences you, struct-first models that bind the environment driver, are documented overrides layered on top of the explicit core, not replacements for it.
 
 ## A first taste
 
@@ -33,6 +44,19 @@ if (user === null) {
 ```
 
 Hand a driver explicitly only to join a transaction (`Users.find(1, tx)`), or the read silently runs outside it.
+
+## You pick the altitude
+
+Direct functions handle the simple reads and writes. A fluent builder covers operators, grouped logic, joins, and pagination. A model class gives you dirty tracking, hooks, casts, timestamps, soft deletes, and relations when you want an active-record feel. It does not try to be your whole backend: no auth, no caching, no schema magic beyond an explicit migration runner.
+
+## Honest caveats
+
+Read these before you commit to it:
+
+- The API is pre-release and still moving. Freezing it is the one tracked task left before 2.0.
+- Exact decimal and big-integer support only just landed.
+- Postgres and SQL Server pass the suite, but verify exotic column types against your own live database.
+- One maintainer. You should be comfortable reading source. If that last line bothers you, this is not your ORM yet.
 
 ## Documentation
 
@@ -81,6 +105,10 @@ npx ts-orm migrate:rollback
 ## Requirements
 
 Node 24 or later. The SQLite driver uses the built-in `node:sqlite`, so it needs no extra package. MySQL rides on the bundled `mysql2`. Postgres (`pg`) and SQL Server (`mssql`) are optional peers, installed only for the engines you use.
+
+## Performance
+
+Not the bottleneck. A mixed workload benchmarks around 12k requests per second on Postgres with single-digit-millisecond p99s. That is all the number claims: fast enough to get out of the way. The reason to reach for ts-orm is the opposite of a benchmark. Your data layer should be boring, legible, and exactly as wide as your schema.
 
 ## Security
 
