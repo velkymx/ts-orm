@@ -23,7 +23,7 @@ class AppUser extends defineModel(User) {
 }
 ```
 
-Override the driver by passing it explicitly, either as `defineModel(User, driver)` or the legacy `defineModel(driver, User)` order, both still supported. The later examples on this page pass an explicit in-memory driver so each section runs in isolation. Inside a transaction, pass the tx handle per call (`AppUser.find(1, tx)`), or the read silently runs outside the transaction.
+To bind a specific driver instead of the environment one, pass it after the struct: `defineModel(User, driver)`. The later examples on this page do exactly that with an in-memory driver so each section runs in isolation. Inside a transaction, pass the tx handle per call (`AppUser.find(1, tx)`), or the read silently runs outside the transaction.
 
 ## Create, find, and list
 
@@ -44,7 +44,7 @@ A primary key you supply is authoritative: `create` only fills the key from the 
 
 ## Dirty tracking and save
 
-An instance remembers the values it was hydrated with. `fill` merges new values, skipping `undefined` so absent patch keys stay clean, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns. Every write surfaces its affected rows: `delete` and `forceDelete` return them, while `save` and `restore` record them on `lastAffectedRows`. Zero means the write matched nothing; what that means for the flow is the caller's decision. Counts are matched rows on every engine (mysql2 requests FOUND_ROWS by default):
+An instance remembers the values it was hydrated with. `fill` merges new values, skipping `undefined` so absent patch keys stay clean, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns. Every write surfaces its affected rows: `delete` and `forceDelete` return them, while `save` and `restore` record them on `lastAffectedRows`. The count is whatever the engine reports affected, and what it means for the flow is the caller's decision. One engine difference to know: MySQL counts rows actually changed, not rows matched, so an update that sets a row to the values it already holds reports zero there while the other engines report one. Do not treat zero as proof that nothing matched on MySQL.
 
 ```ts
 const user = await AppUser.find(1);
@@ -77,7 +77,7 @@ console.log(removed.affectedRows);
 Set a static `hooks` object to run code around writes. Before-hooks run first and can veto the write by throwing; after-hooks run once the write is durable. The hook names are `saving`, `creating`, `created`, `saved`, `updating`, `updated`, `deleting`, `deleted`, `restoring`, `restored`, `forceDeleting`, and `forceDeleted`.
 
 ```ts
-class AppUser extends defineModel(driver, User) {
+class AppUser extends defineModel(User, driver) {
   static hooks = {
     creating: (ctx) => {
       if (!ctx.attributes.name) throw new Error('name is required');
@@ -107,7 +107,7 @@ const Post = defineStruct('posts', {
   updated_at: { type: 'datetime' },
 });
 
-class AppPost extends defineModel(driver, Post) {}
+class AppPost extends defineModel(Post, driver) {}
 
 const post = await AppPost.create({ title: 'hello' });
 console.log(post.toRow().created_at); // 2024-05-01 10:00:00
@@ -127,7 +127,7 @@ const Item = defineStruct('items', {
   seen_at: { type: 'string' },
 });
 
-class AppItem extends defineModel(driver, Item) {
+class AppItem extends defineModel(Item, driver) {
   static casts = { active: 'boolean', meta: 'json', seen_at: 'datetime' };
 }
 
@@ -170,7 +170,7 @@ const Post = defineStruct('posts', {
   deleted_at: { type: 'datetime' },
 });
 
-class AppPost extends defineModel(driver, Post) {
+class AppPost extends defineModel(Post, driver) {
   static softDeletes = true;
 }
 

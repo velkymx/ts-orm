@@ -43,6 +43,9 @@ barrel, so rebuild first.
   and targeted back at `develop` (never `main`).
 - Keep PRs focused: no unrelated changes, formatting, or refactoring.
 - All PRs require review before merge.
+- A PR that changes the exports in `src/index.ts` updates
+  `docs/api-reference.md` in the same PR, so the documented surface never
+  drifts from the barrel.
 
 ### Commit Message Convention
 
@@ -51,7 +54,7 @@ follows the 7 rules popularized by Chris Beams and summarized in the
 AJB Blog guide to Git best practices
 (https://blog.ajb.bz/git-best-practices-a-guide-for-new-developers):
 
-- Subject: `Imperative summary`, capitalized, no period, under 50 chars. No type or scope prefixes on new work (older history still carries them; do not mix styles).
+- Subject: `Imperative summary`, capitalized, no period, under 50 chars. No type or scope prefixes.
 - Blank line, then a body explaining what changed and why (wrap near 72 cols).
 - Reference the issue in the body with `Refs #N`, and `Closes #N` only on the PR description.
 - Never work directly on the primary branch; one branch and one PR per issue.
@@ -63,6 +66,22 @@ AJB Blog guide to Git best practices
 - Prefer clarity over cleverness; small single-purpose functions.
 - Identifiers pass the allowlist and are quoted; values are always
   bound, never interpolated. No em-dashes or en-dashes in prose.
+
+## Versioning and the public surface
+
+The public API is exactly the top-level barrel (`@velkymx/ts-orm`),
+enumerated in [docs/api-reference.md](docs/api-reference.md). A deep
+import into `src/` is internal and carries no stability promise.
+
+The package is on the `2.0.0-dev.x` prerelease line and the surface is
+not frozen: breaking changes to the listed exports are allowed and
+advance the `dev.N` segment. The surface freezes at `2.0.0`, after which
+standard semantic versioning applies against the API reference: removing
+or re-signing a listed export is a major bump, adding one is a minor, a
+behavior fix is a patch.
+
+There is no changelog file. The record of a release is the set of
+GitHub issues closed for it, linked from the release notes for its tag.
 
 ## Release process
 

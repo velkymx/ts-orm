@@ -4,7 +4,9 @@ This page explains why ts-orm is built the way it is. For how to use each
 feature, start with [Getting started](getting-started.md) and the task
 guides it links: [Queries](queries.md), [Models](models.md),
 [Relations](relations.md), [Transactions](transactions.md), and
-[Schema and migrations](schema-and-migrations.md).
+[Schema and migrations](schema-and-migrations.md). For the exact list of
+what the package exports and promises to keep stable, see the
+[API reference](api-reference.md).
 
 ## Design decisions
 
@@ -36,7 +38,7 @@ guides it links: [Queries](queries.md), [Models](models.md),
   plus `verbatimModuleSyntax` in tsconfig and the `no-explicit-any`
   lint rule. `tests/strip-types.test.ts` executes real sources under
   Node type stripping with no build step, so regressions fail loudly.
-  Legacy `.js` twins that shadow a TS module are removed on sight:
+  Plain `.js` files that shadow a TS module are removed on sight:
   they silently win module resolution.
 - Introspection reads, never owns. `generateStructFromTable` maps a
   live MySQL table to struct fields over the shared driver (no private
@@ -86,11 +88,15 @@ schema-builder column definitions.
 Reads trust the engine. Writes validate against the struct, but rows
 coming back are cast to the row type without a runtime check, so a few
 engine behaviors surface as values that do not match their declared
-type. Postgres returns `NUMERIC` and `BIGINT` as strings. MySQL
-`BIGINT` values past 2^53 lose precision when read as a JavaScript
-number. A `NULL` in a column the struct marks `required` still types as
-non-null. None of these are caught at read time; handle large integers
-as strings or `bigint`, and do not assume a required column is never
+type. Postgres and MySQL both return `NUMERIC` and `BIGINT` as strings;
+the MySQL pool requests string form so large integers never round
+through a JavaScript number. Model exact money and identifiers with the
+`decimal` and `bigint` field types, whose declared type is already
+`string`. The mismatch that remains is a column typed `number` but
+backed by one of those SQL types, which reads back as a string, and a
+`NULL` in a column the struct marks `required`, which still types as
+non-null. Neither is caught at read time, so declare such columns with
+the matching field type and do not assume a required column is never
 null in data the library did not write.
 
 ## Schema and migrations
