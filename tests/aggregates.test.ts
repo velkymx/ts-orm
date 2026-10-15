@@ -90,19 +90,37 @@ describe('paginate (issue 25)', () => {
     const base = query(driver, Order).where('status', 'paid').orderBy('id', 'asc');
     const page1 = await base.paginate(1, 2);
     expect(page1).toEqual({
-      data: [
-        { id: 1, status: 'paid', total: 10 },
-        { id: 2, status: 'paid', total: 20 },
-      ],
-      total: 5,
-      page: 1,
-      perPage: 2,
-      lastPage: 3,
+      success: true,
+      message: 'Page retrieved',
+      data: {
+        data: [
+          { id: 1, status: 'paid', total: 10 },
+          { id: 2, status: 'paid', total: 20 },
+        ],
+        total: 5,
+        page: 1,
+        perPage: 2,
+        lastPage: 3,
+      },
     });
     const page3 = await base.paginate(3, 2);
-    expect(page3.data.map((r) => r.id)).toEqual([5]);
-    expect(page3.lastPage).toBe(3);
+    expect(page3.success && page3.data.data.map((r) => r.id)).toEqual([5]);
+    expect(page3.success && page3.data.lastPage).toBe(3);
     await driver.close();
+  });
+
+  it('returns a failure instead of throwing when the read fails', async () => {
+    const broken = {
+      dialect: mysql,
+      query: async () => {
+        throw new Error('down');
+      },
+      execute: async () => ({ affectedRows: 0 }),
+      close: async () => {},
+      [Symbol.asyncDispose]: async () => {},
+    };
+    const result = await query(broken, Order).paginate(1, 10);
+    expect(result.success).toBe(false);
   });
 
   it('coerces out-of-range paging input', async () => {
@@ -114,9 +132,9 @@ describe('paginate (issue 25)', () => {
     await driver.execute('INSERT INTO "orders" ("status", "total") VALUES (?, ?)', ['paid', 1]);
     const base = query(driver, Order).orderBy('id', 'asc');
     const coerced = await base.paginate(0, 500);
-    expect(coerced.page).toBe(1);
-    expect(coerced.perPage).toBe(100);
-    expect(coerced.total).toBe(1);
+    expect(coerced.success && coerced.data.page).toBe(1);
+    expect(coerced.success && coerced.data.perPage).toBe(100);
+    expect(coerced.success && coerced.data.total).toBe(1);
     await driver.close();
   });
 });
