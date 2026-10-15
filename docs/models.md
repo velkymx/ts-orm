@@ -44,7 +44,7 @@ A primary key you supply is authoritative: `create` only fills the key from the 
 
 ## Dirty tracking and save
 
-An instance remembers the values it was hydrated with. `fill` merges new values, skipping `undefined` so absent patch keys stay clean, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns. Every write surfaces its affected rows: `delete` and `forceDelete` return them, while `save` and `restore` record them on `lastAffectedRows`. The count is whatever the engine reports affected, and what it means for the flow is the caller's decision. One engine difference to know: MySQL counts rows actually changed, not rows matched, so an update that sets a row to the values it already holds reports zero there while the other engines report one. Do not treat zero as proof that nothing matched on MySQL.
+An instance remembers the values it was hydrated with. `fill` merges new values, skipping `undefined` so absent patch keys stay clean, `isDirty` reports whether anything changed, and `getChanges` returns only the changed fields. `save` inserts when the instance has no primary key and otherwise updates, writing only the dirty columns. Every write surfaces its affected rows: `delete` and `forceDelete` return them, while `save` and `restore` record them on `lastAffectedRows`. Zero means the write matched nothing; what that means for the flow is the caller's decision. Counts are matched rows on every engine (mysql2 requests FOUND_ROWS by default):
 
 ```ts
 const user = await AppUser.find(1);
