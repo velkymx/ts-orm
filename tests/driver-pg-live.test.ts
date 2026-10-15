@@ -41,7 +41,13 @@ async function fresh(): Promise<void> {
 
 describe.runIf(LIVE)('postgres live driver (pg proving)', () => {
   beforeAll(async () => {
-    configurePostgres({ host: '/tmp', user: 'velkymx', password: '', database: 'tsorm_pg', port: 5432 });
+    configurePostgres({
+      host: process.env['TS_ORM_PG_HOST'] ?? '/tmp',
+      user: process.env['TS_ORM_PG_USER'] ?? 'velkymx',
+      password: process.env['TS_ORM_PG_PASSWORD'] ?? '',
+      database: process.env['TS_ORM_PG_DATABASE'] ?? 'tsorm_pg',
+      port: process.env['TS_ORM_PG_PORT'] ? Number(process.env['TS_ORM_PG_PORT']) : 5432,
+    });
     driver = createPostgresDriver();
   });
 
