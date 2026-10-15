@@ -24,6 +24,7 @@ To run several writes atomically, use `transaction(driver, async (tx) => { ... }
 
 ## Documentation
 
+- [API reference](docs/api-reference.md): the authoritative list of every public export and the stability contract. The public API is exactly the top-level barrel; a deep import into `src/` is internal and unsupported.
 - [Getting started](docs/getting-started.md): install, connect, declare a struct, CRUD, first query, first model.
 - [Queries](docs/queries.md): the query builder, from one condition to grouped OR logic, aggregates, and pagination.
 - [Models](docs/models.md): instances, dirty tracking, lifecycle hooks, timestamps, attribute casts, soft deletes.

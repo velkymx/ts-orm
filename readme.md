@@ -46,6 +46,8 @@ Read these in order the first time:
 6. [Schema and migrations](docs/schema-and-migrations.md): the schema builder, the runner, and the CLI.
 7. [Architecture](docs/architecture.md): the design decisions and the driver seam, for contributors.
 
+The [API reference](docs/api-reference.md) lists every public export and the stability contract when you need to look one up.
+
 Runnable versions of every example live in [examples/](examples/). Build once with `npm run build`, then run any file, for example `node examples/basic-crud.mjs`.
 
 ## The CLI

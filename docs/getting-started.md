@@ -69,14 +69,15 @@ const User = defineStruct('users', {
 
 Each field has a `type`, and the options after it act as inline documentation that also drives behavior. The field types are `number`, `string`, `uuid`, `date`, `datetime`, `boolean`, and `enum`. Mark a column `required`, cap a string with `length`, hand insert values to the database with `default`, and list allowed values for an `enum` column.
 
-ts-orm does not create the table for you from a struct unless you run a migration. For this tutorial, create it directly:
+A struct does not create its table on its own. Build the DDL from the same struct with the schema builder and run it through the driver, so one line targets every engine:
 
 ```ts
-await driver.execute(
-  'CREATE TABLE "users" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT, "age" INTEGER)',
-  [],
-);
+import { structColumns, buildCreateTable } from '@velkymx/ts-orm';
+
+await driver.execute(buildCreateTable(driver.dialect, 'users', structColumns(User)), []);
 ```
+
+`buildCreateTable` is safe to rerun and picks each engine's native types and auto-increment strategy. [Schema and migrations](schema-and-migrations.md) takes this further into versioned migrations and the CLI.
 
 ## Read and write with CRUD functions
 
